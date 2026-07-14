@@ -1,0 +1,8 @@
+sequenceDiagram
+  box rgb(240,240,240) Backend
+    participant API
+    participant DB
+  end
+  Client->>API: Request
+  API->>DB: Query
+  DB-->>API: Rows

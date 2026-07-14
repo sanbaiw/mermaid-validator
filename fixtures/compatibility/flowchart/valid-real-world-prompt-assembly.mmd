@@ -1,0 +1,9 @@
+flowchart LR
+  CONTRACT["Stable agent contract"] --> REQUEST["Model request"]
+  CONTEXT["Dynamic context"] --> REQUEST
+  HISTORY["Conversation state"] --> REQUEST
+  TOOLS["Tool schemas"] --> REQUEST
+  META["Request and cache metadata"] --> REQUEST
+
+  REQUEST --> CLAUDE["Claude Code: system / messages / tools"]
+  REQUEST --> CODEX["Codex: instructions / input / tools"]

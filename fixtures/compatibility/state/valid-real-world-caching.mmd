@@ -1,0 +1,17 @@
+stateDiagram-v2
+    [*] --> SteadyState
+    SteadyState --> PreTurnCompact: token limit / comp_hash change / model downshift
+    SteadyState --> MidTurnCompact: follow up work plus limit reached
+    SteadyState --> StandaloneTurn: manual compact (UI)
+    PreTurnCompact --> LocalCompact
+    PreTurnCompact --> RemoteCompact
+    MidTurnCompact --> LocalCompact
+    MidTurnCompact --> RemoteCompact
+    StandaloneTurn --> LocalCompact
+    StandaloneTurn --> RemoteCompact
+    LocalCompact --> TrimOldest: ContextWindowExceeded
+    TrimOldest --> LocalCompact
+    LocalCompact --> ReplaceHistory
+    RemoteCompact --> ReplaceHistory
+    ReplaceHistory --> NewBaseline
+    NewBaseline --> SteadyState

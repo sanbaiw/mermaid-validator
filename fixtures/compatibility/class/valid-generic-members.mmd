@@ -1,0 +1,7 @@
+classDiagram
+  class Repository~T~ {
+    +save(item T)
+    +find(id string) T
+  }
+  class User
+  Repository~User~ --> User : stores

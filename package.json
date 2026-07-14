@@ -1,0 +1,32 @@
+{
+  "name": "mermaid-diagram-validator",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Stage 0 compatibility spike for a Mermaid diagram validator",
+  "type": "module",
+  "engines": {
+    "node": "^22.13.0 || >=24.0.0"
+  },
+  "packageManager": "pnpm@10.30.1",
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc -p tsconfig.build.json --noEmit && tsc -p tsconfig.test.json --noEmit",
+    "test": "pnpm build && vitest run",
+    "hygiene": "pnpm build && node dist/spike/hygiene.js",
+    "compatibility": "pnpm build && vitest run tests/compatibility",
+    "compatibility:update": "pnpm build && vitest run tests/compatibility -u",
+    "check": "pnpm typecheck && pnpm build && node dist/spike/hygiene.js && vitest run"
+  },
+  "dependencies": {
+    "@mermaid-lint/core": "0.35.0",
+    "@mermanjs/web": "0.7.0",
+    "mermaid": "11.16.0"
+  },
+  "devDependencies": {
+    "@types/jsdom": "21.1.7",
+    "@types/node": "24.13.3",
+    "jsdom": "26.1.0",
+    "typescript": "7.0.2",
+    "vitest": "4.1.10"
+  }
+}
