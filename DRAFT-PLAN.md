@@ -1,6 +1,6 @@
 # Mermaid Diagram Validator — Implementation Plan
 
-- Status: Stage 0 complete; Stage 1 not started
+- Status: Stages 0–1 complete; Stage 2 not started
 - Updated: 2026-07-16
 - Runtime: TypeScript on Node.js
 - Package manager: pnpm
@@ -184,9 +184,9 @@ A browser-backed parsing fallback is a contingency only if Stage 0 proves JSDOM 
 | Test runner | Vitest `4.1.10` | Stage 0 | Use fixture, contract, unit, and integration tests. |
 | Canonical parser | `mermaid` `11.16.0` | Stage 0 | Use the strict JSDOM profile recorded in ADR 0001. |
 | Reusable foundation | `@mermaid-lint/core` `0.35.0` | Stage 0 | Wrap selected exports behind local adapters; aggregate validation is noncanonical. |
-| Parser DOM | `jsdom` `26.1.0` | Stage 0 spike / Stage 1 decision | JSDOM-only parsing passed the full Stage 0 corpus; Stage 1 will decide its runtime placement. |
-| CLI | `commander` | Stage 1 | Keep it a thin adapter over the in-memory core. |
-| Terminal code frames | Reuse upstream support or `@babel/code-frame` | Stage 1 | Add the dependency only if reuse is insufficient. |
+| Parser DOM | `jsdom` `26.1.0` | Stage 1 runtime | JSDOM-only parsing passed the full Stage 0 corpus and now initializes the isolated canonical worker. |
+| CLI | `commander` `15.0.0` | Stage 1 | Keep it a thin adapter over the in-memory core. |
+| Terminal diagnostics | Project-owned compiler-style lines | Stage 1 | Source offsets are projected without a code-frame dependency. |
 | Config/rule schemas | `zod` | Stage 2/3 | Validate user config and rule options. |
 | Config discovery | `lilconfig` | Stage 2 | Prefer alignment with the reusable lint foundation. |
 | File discovery | Reuse upstream support or `fast-glob` | Stage 2 | Add only if the adapter cannot expose adequate discovery. |
@@ -213,7 +213,7 @@ The `v0.1` through `v0.4` release cuts below are internal version milestones, no
 
 ### Stage 0 — Compatibility and reuse spike
 
-Status: Completed again on 2026-07-14 after evidence hardening and local Node 22/24 verification. Stage 1 has not started.
+Status: Completed again on 2026-07-14 after evidence hardening and local Node 22/24 verification.
 
 Purpose: prove the foundation before choosing between wrapping, contributing upstream, or replacing pieces.
 
@@ -240,6 +240,8 @@ Exit criteria:
 - No visual dependency has been added.
 
 ### Stage 1 — Canonical syntax CLI
+
+Status: Completed on 2026-07-16. The frozen install, full 15-file/66-test gate, and unchanged 27-fixture/108-observation compatibility gate pass on Node 22.20.0 and Node 24.18.0. Stage 2 remains unstarted.
 
 Purpose: deliver the smallest reliable product surface.
 

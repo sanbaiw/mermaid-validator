@@ -6,9 +6,9 @@ import type {
   EngineObservation,
   LoadedCompatibilityCase,
   SelectedFactSummary,
-} from "../spike/contracts.js";
-import { conciseMessage, normalizeDiagramType, rejectedObservation } from "../spike/normalize.js";
-import { ENGINE_VERSIONS } from "../spike/versions.js";
+} from "../contracts.js";
+import { conciseMessage, normalizeDiagramType, rejectedObservation } from "../normalize.js";
+import { ENGINE_VERSIONS } from "../versions.js";
 
 const VERSION = ENGINE_VERSIONS.merman;
 const require = createRequire(import.meta.url);

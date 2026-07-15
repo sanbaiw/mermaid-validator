@@ -27,11 +27,12 @@ The first validation command prints nothing and exits `0`. The second prints one
 - [x] (2026-07-15 17:00Z) Resolved the fourth design-review branch and generalized it across the roadmap: Stages 1–5 keep programmatic interfaces private for rapid iteration; Stage 6 decides which interfaces become supported package exports.
 - [x] (2026-07-15 17:14Z) Resolved the fifth design-review branch: isolate worker output from product output, discard worker stdout, retain only a bounded internal stderr tail, and never copy raw worker output into Findings, terminal output, or JSON.
 - [x] (2026-07-15 17:16Z) Closed the remaining evidence-determined review branches: preserve the Stage 0 raw-type alias map inside the product runtime, parse architecture imports with the existing TypeScript compiler API, and reserve installed-package/bin smoke tests for Stage 6.
-- [ ] Move Stage 0 Compatibility Evidence from `src/spike/` and `src/adapters/` into `src/compatibility/` without changing any observation, snapshot, command result, or dependency version.
-- [ ] Define the Stage 1 Diagram Validation module types and `validateDocument` operation under `src/validation/`, with contract tests that cross only the repository-internal `src/validation/index.ts` seam.
-- [ ] Implement the serialized official-Mermaid child worker, bounded startup/request timeouts, crash detection, restart behavior, cancellation, and raw-error normalization under `src/validation/canonical-syntax/`.
-- [ ] Add the one-file CLI, terminal projection, JSON-v1 projection, exact-pinned Commander dependency, package `bin` entry, deterministic exit codes, and built-process integration tests under `src/cli/`.
-- [ ] Document the JSON-v1 and CLI contracts, update Stage 1 status and user instructions, pass the frozen-install gates on Node 22.20.0 and Node 24.18.0, and close this living plan without beginning Stage 2.
+- [x] (2026-07-15 17:34Z) Moved Stage 0 Compatibility Evidence from `src/spike/` and `src/adapters/` into `src/compatibility/`; the 27-fixture/108-observation snapshot boundary remained unchanged.
+- [x] (2026-07-15 17:39Z) Defined the Stage 1 Diagram Validation types, UTF-16 offset projection, stable outcome mapping, and `validateDocument` operation behind `src/validation/index.ts`.
+- [x] (2026-07-15 17:44Z) Implemented the serialized official-Mermaid child worker with bounded startup/request timeouts, FIFO requests, crash/protocol/runtime recovery, cancellation, and bounded private stderr capture.
+- [x] (2026-07-15 17:50Z) Added the one-file CLI, terminal and JSON-v1 projections, exact-pinned Commander dependency, private package `bin` mapping, deterministic exit codes, and built-process tests.
+- [x] (2026-07-15 17:53Z) Documented JSON-v1 and CLI behavior, updated the Stage 1 roadmap status, and passed the frozen-install, 65-test full gate, and unchanged compatibility gate on Node 22.20.0 and Node 24.18.0. Stage 2 remains unstarted.
+- [x] (2026-07-15 18:35Z) Fixed the post-review startup-cancellation leak: when cancellation removes the only queued request while the canonical worker is still initializing, the host now kills and forgets that worker; a delayed-ready regression proves the next request starts a fresh worker. The final gate is now 15 files / 66 tests on Node 22.20.0 and Node 24.18.0.
 
 ## Surprises & Discoveries
 
@@ -64,6 +65,24 @@ The first validation command prints nothing and exits `0`. The second prints one
 
 - Observation: The existing toolchain can inspect TypeScript import syntax without another parser dependency, while the private early-stage package has no installed-consumer promise to test.
   Evidence: `typescript@7.0.2` is already exact-pinned, and its compiler API represents static imports, re-exports, and string-literal dynamic imports. `DRAFT-PLAN.md` and `ARCHITECTURE.md` now keep the package private through Stage 5 and place clean-install, public-export, and installed-consumer acceptance in Stage 6.
+
+- Observation: RTK's optimized `pnpm typecheck` path did not preserve this repository's no-emit behavior, while the raw package script did.
+  Evidence: Repeated isolated probes showed `rtk pnpm typecheck` materializing untracked `.js` and `.js.map` files under tests and fixtures, while `rtk proxy pnpm typecheck` ran the manifest command and left the tree clean. Final gates therefore use RTK's raw proxy, and repository hygiene now rejects generated JavaScript under source, tests, fixtures, and the Vitest config.
+
+- Observation: TypeScript 7's synchronous project API emits the opened source graph even when its temporary project requests `noEmit`.
+  Evidence: Isolated architecture-test runs materialized `.js` beside the live `src/**/*.ts`. The focused import-boundary test now copies `src/` into a temporary repo-local project, performs the same TypeScript-aware NodeNext inspection there, and removes the entire temporary project in `finally`; the live tree remains clean.
+
+- Observation: Source-loaded Vitest modules and the built product need different paths to the compiled worker sibling.
+  Evidence: After generated source artifacts were removed, source tests correctly exposed that `src/validation/canonical-syntax/worker-entry.js` does not exist. The host now maps a source-loaded sibling path to the corresponding `dist/` path while built code continues using its actual compiled sibling.
+
+- Observation: Cold Mermaid/JSDOM initialization can exceed Vitest's five-second default on a fresh one-shot process while remaining within the product's ten-second startup budget.
+  Evidence: Direct built CLI runs completed in roughly four seconds on the local Node 22 profile, exited without a referenced child handle, and the integration suite stayed green after setting a 20-second test budget rather than changing the parser timeout.
+
+- Observation: Repository hygiene must ignore tracked index entries already removed by an unstaged source move.
+  Evidence: `git ls-files --cached` reported the old `src/spike/` and `src/adapters/` paths until staging, causing an `ENOENT`. The checker now skips only missing paths while continuing to inspect every existing tracked and untracked file; no staging was required to validate the migration.
+
+- Observation: A request cancelled during cold worker startup is still queued even though it is the only work keeping the initializing child alive.
+  Evidence: The post-review delayed-ready regression first failed because the request following cancellation was handled by the original worker. The queued-cancellation path now discards an unready worker only when no active or queued work remains; the regression passes by observing a second worker launch and a successful later request.
 
 ## Decision Log
 
@@ -139,8 +158,8 @@ The first validation command prints nothing and exits `0`. The second prints one
   Rationale: Official Mermaid returns multiple raw names for the five supported families. The product boundary must canonicalize those names consistently, but Compatibility Evidence must remain an independent oracle and a one-table helper file would be a shallow abstraction. A successful parse result is authoritative for the raw type, with `detectType()` only as a fallback when that result lacks a usable type. Recognized aliases map to the five product-owned target names; a successfully parsed unrecognized official type remains unsupported under its raw name; if both official results lack a usable type, the outcome is a protocol failure. On syntax rejection, a recognized detected alias may enrich the Finding with its canonical target name but cannot change the rejection verdict.
   Date/Author: 2026-07-16 / User and Codex
 
-- Decision: Implement the focused Stage 1 import-boundary test with the existing TypeScript compiler API rather than regular expressions or a new dependency.
-  Rationale: `ts.createSourceFile` plus AST walking can enumerate static imports, re-exports, and string-literal dynamic imports, while TypeScript module resolution can identify their local targets under the repository's NodeNext rules. This is enough to enforce the active Stage 1 edges without pretending to build the generalized future import-graph checker.
+- Decision: Implement the focused Stage 1 import-boundary test with the existing TypeScript 7 API rather than regular expressions or a new dependency.
+  Rationale: The `typescript/unstable/sync` project API supplies parsed source files and checker-resolved module symbols, while `typescript/unstable/ast` walks static imports, re-exports, and string-literal dynamic imports. A temporary copy contains the API's emitter side effect while preserving actual NodeNext resolution, without adding a parser dependency or pretending to build the generalized future import-graph checker.
   Date/Author: 2026-07-16 / User and Codex
 
 - Decision: Test Stage 1 CLI behavior by spawning `node dist/cli/main.js`; do not pack, install, or claim the `mermaid-validator` command works from an installed package yet.
@@ -149,7 +168,13 @@ The first validation command prints nothing and exits `0`. The second prints one
 
 ## Outcomes & Retrospective
 
-This section is intentionally open at plan creation. At each milestone, record the observable behavior delivered, the exact tests and runtime gates that passed, any mismatch with the plan, and whether the remaining work still fits Stage 1. At completion, compare the resulting CLI, repository-internal in-memory module interface, worker recovery behavior, JSON-v1 output, exit codes, Node matrix, and preserved compatibility evidence against the Purpose section. State explicitly that Stage 2 remains unstarted.
+Stage 1 delivered the planned private `v0.1.0` canonical syntax validator without activating later-stage or visual scope. The built CLI validates one `.mmd` or `.mermaid` file for Flowchart, Sequence, Pie, Class, or State; distinguishes syntax, unsupported family, input, and parser-infrastructure outcomes; emits compiler-style terminal lines or documented JSON-v1; and exits with codes `0`, `1`, `2`, or `3` by the accepted precedence.
+
+The repository-internal `src/validation/index.ts` seam returns deterministic findings with original-document UTF-16 spans where Mermaid supplies approximate coordinates. The canonical worker serializes concurrent calls, reuses an accepted/syntax-rejecting worker, restarts after runtime/timeout/crash/protocol failure, honors queued and in-flight cancellation, bounds private stderr to 4,096 UTF-16 code units, and does not leak raw worker output or keep the one-shot CLI alive.
+
+The final gates passed on Node 22.20.0 and Node 24.18.0: `pnpm check` passed 15 test files / 66 tests, and `pnpm compatibility` passed 4 files / 16 tests. Compatibility Evidence stayed at 27 fixtures / 108 observations, the two known `pie-invalid-header` noncanonical mismatches, 5/5 coordinate expectations, and 12/12 complete selected Merman fact summaries. Product runtime dependencies are only Commander `15.0.0`, JSDOM `26.1.0`, and Mermaid `11.16.0`; the package remains private with no `exports` or `types` field. A post-implementation review found and fixed cancellation during worker startup so a completed aborted caller cannot leave the initializing child referenced.
+
+Implementation differed from the written mechanics only where live evidence required it: TypeScript 7's current project/AST APIs replaced the older `ts.createSourceFile` sketch, the source-test worker path maps to the compiled `dist` sibling, and the integration test budget accounts for cold parser initialization. These are test/lifecycle details, not architecture changes, so `ARCHITECTURE.md` and ADR 0001 required no revision. Stage 2 remains unstarted.
 
 ## Context and Orientation
 
@@ -505,12 +530,10 @@ The final dependency shape should resemble:
       typescript 7.0.2
       vitest 4.1.10
 
-At completion, replace this placeholder with the concise real evidence:
-
     $ pnpm check
     Repository hygiene: clean across tracked and untracked files
-    Test Files  <actual> passed (<actual>)
-    Tests       <actual> passed (<actual>)
+    Test Files  15 passed (15)
+    Tests       66 passed (66)
 
     $ pnpm compatibility
     Compatibility summary: 27 fixtures, 108 observations
@@ -686,3 +709,7 @@ The only new external runtime dependency is exact-pinned `commander@15.0.0`. Exa
 2026-07-16 / User and Codex: Isolated raw worker output from product output. The worker now uses ignored stdin/stdout, piped stderr, and IPC; the host drains and bounds stderr as internal `debugDetail`, while Diagram Validation must discard that detail before producing Findings. No raw worker marker may reach terminal, JSON, or parent stderr, and Stage 1 exposes no debug mode.
 
 2026-07-16 / User and Codex: Closed the evidence-determined review branches. Canonical Syntax now owns the exact proven Mermaid raw-type aliases inside `mermaid-runtime.ts`; the focused import-boundary test uses the existing TypeScript compiler AST and module resolver; and Stage 1 verifies the private CLI through `node dist/cli/main.js` while Stage 6 retains clean-install and real package-bin acceptance.
+
+2026-07-16 / Codex: Implemented and closed Stage 1. Compatibility Evidence moved unchanged, the validation and isolated canonical-worker modules landed, the one-file terminal/JSON CLI and documentation landed, direct runtime dependencies were reduced to Commander/JSDOM/Mermaid, and the initial 65-test plus compatibility gates passed on Node 22.20.0 and Node 24.18.0. No Stage 2, visual, package-publication, commit, tag, or push work was performed.
+
+2026-07-16 / Codex: Fixed the high-priority startup-cancellation lifecycle defect found during post-implementation review. A delayed-ready worker regression proves that aborting the sole queued request discards the initializing child and that the next request starts a fresh worker. The updated 66-test full gate and unchanged compatibility gate pass on Node 22.20.0 and Node 24.18.0.

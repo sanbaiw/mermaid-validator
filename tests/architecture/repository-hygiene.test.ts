@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { promisify } from "node:util";
 import { afterEach, describe, expect, it } from "vitest";
-import { findRepositoryHygieneProblems } from "../../src/spike/hygiene.js";
+import { findRepositoryHygieneProblems } from "../../src/compatibility/hygiene.js";
 
 const execFileAsync = promisify(execFile);
 let temporaryRoot: string | undefined;
@@ -24,7 +24,7 @@ describe("repository hygiene", () => {
 
     await expect(findRepositoryHygieneProblems(temporaryRoot)).resolves.toEqual([
       "notes.md:1 has trailing whitespace",
-      "src/generated.js is a generated JavaScript artifact under src/",
+      "src/generated.js is a generated JavaScript artifact outside dist/",
     ]);
   });
 });

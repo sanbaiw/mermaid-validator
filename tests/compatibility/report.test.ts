@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import type { EngineObservation, LoadedCompatibilityCase } from "../../src/spike/contracts.js";
-import { formatCompatibilitySummary } from "../../src/spike/report.js";
+import type { EngineObservation, LoadedCompatibilityCase } from "../../src/compatibility/contracts.js";
+import { formatCompatibilitySummary } from "../../src/compatibility/report.js";
 
 const fixtures: LoadedCompatibilityCase[] = [
   {

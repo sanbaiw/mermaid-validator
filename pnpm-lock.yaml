@@ -8,25 +8,28 @@ importers:
 
   .:
     dependencies:
+      commander:
+        specifier: 15.0.0
+        version: 15.0.0
+      jsdom:
+        specifier: 26.1.0
+        version: 26.1.0
+      mermaid:
+        specifier: 11.16.0
+        version: 11.16.0
+    devDependencies:
       '@mermaid-lint/core':
         specifier: 0.35.0
         version: 0.35.0
       '@mermanjs/web':
         specifier: 0.7.0
         version: 0.7.0
-      mermaid:
-        specifier: 11.16.0
-        version: 11.16.0
-    devDependencies:
       '@types/jsdom':
         specifier: 21.1.7
         version: 21.1.7
       '@types/node':
         specifier: 24.13.3
         version: 24.13.3
-      jsdom:
-        specifier: 26.1.0
-        version: 26.1.0
       typescript:
         specifier: 7.0.2
         version: 7.0.2
@@ -501,6 +504,10 @@ packages:
   chai@6.2.2:
     resolution: {integrity: sha512-NUPRluOfOiTKBKvWPtSD4PhFvWCqOi0BGStNWs57X9js7XGTprSmFoz5F0tWhR4WPjNeR9jXqdC7/UpSJTnlRg==}
     engines: {node: '>=18'}
+
+  commander@15.0.0:
+    resolution: {integrity: sha512-z67u4ZhzCL/Tydu1lJARtEZYWbWaN7oYLHbsuzocr6y4N6WZAagG3RQ4FW61V1/0+jImpj293XfrcYnd1qxtPg==}
+    engines: {node: '>=22.12.0'}
 
   commander@7.2.0:
     resolution: {integrity: sha512-QrWXB+ZQSVPmIWIhtEO9H+gwHaMGYiF5ChvoJ+K9ZGHG/sVsa6yiesAD1GC/x46sET00Xlwo1u49RVVVzvcSkw==}
@@ -1587,6 +1594,8 @@ snapshots:
       fill-range: 7.1.1
 
   chai@6.2.2: {}
+
+  commander@15.0.0: {}
 
   commander@7.2.0: {}
 

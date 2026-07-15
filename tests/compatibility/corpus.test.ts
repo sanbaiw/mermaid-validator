@@ -8,9 +8,9 @@ import type {
   EngineId,
   EngineObservation,
   LoadedCompatibilityCase,
-} from "../../src/spike/contracts.js";
-import { formatCompatibilitySummary } from "../../src/spike/report.js";
-import { runEngineIsolated } from "../../src/spike/run-isolated.js";
+} from "../../src/compatibility/contracts.js";
+import { formatCompatibilitySummary } from "../../src/compatibility/report.js";
+import { runEngineIsolated } from "../../src/compatibility/run-isolated.js";
 
 const engines: EngineId[] = [
   "official-mermaid",

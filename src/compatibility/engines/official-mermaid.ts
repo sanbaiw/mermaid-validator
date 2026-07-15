@@ -1,7 +1,7 @@
 import { JSDOM } from "jsdom";
-import type { CompatibilityAdapter, EngineObservation } from "../spike/contracts.js";
-import { normalizeDiagramType, rejectedObservation } from "../spike/normalize.js";
-import { ENGINE_VERSIONS } from "../spike/versions.js";
+import type { CompatibilityAdapter, EngineObservation } from "../contracts.js";
+import { normalizeDiagramType, rejectedObservation } from "../normalize.js";
+import { ENGINE_VERSIONS } from "../versions.js";
 
 const VERSION = ENGINE_VERSIONS["official-mermaid"];
 const PROFILE = {

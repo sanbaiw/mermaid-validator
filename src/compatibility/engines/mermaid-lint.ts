@@ -1,7 +1,7 @@
 import type { Block } from "@mermaid-lint/core";
-import type { CompatibilityAdapter, EngineObservation, EngineId } from "../spike/contracts.js";
-import { normalizeDiagramType, rejectedObservation } from "../spike/normalize.js";
-import { ENGINE_VERSIONS } from "../spike/versions.js";
+import type { CompatibilityAdapter, EngineObservation, EngineId } from "../contracts.js";
+import { normalizeDiagramType, rejectedObservation } from "../normalize.js";
+import { ENGINE_VERSIONS } from "../versions.js";
 
 const VERSION = ENGINE_VERSIONS["mermaid-lint-official"];
 

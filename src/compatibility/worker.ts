@@ -4,13 +4,13 @@ import { conciseMessage } from "./normalize.js";
 async function adapterFor(engine: EngineId): Promise<CompatibilityAdapter> {
   switch (engine) {
     case "official-mermaid":
-      return (await import("../adapters/official-mermaid.js")).officialMermaidAdapter;
+      return (await import("./engines/official-mermaid.js")).officialMermaidAdapter;
     case "mermaid-lint-official":
-      return (await import("../adapters/mermaid-lint.js")).mermaidLintOfficialAdapter;
+      return (await import("./engines/mermaid-lint.js")).mermaidLintOfficialAdapter;
     case "mermaid-lint-aggregate":
-      return (await import("../adapters/mermaid-lint.js")).mermaidLintAggregateAdapter;
+      return (await import("./engines/mermaid-lint.js")).mermaidLintAggregateAdapter;
     case "merman":
-      return (await import("../adapters/merman.js")).mermanAdapter;
+      return (await import("./engines/merman.js")).mermanAdapter;
   }
 }
 

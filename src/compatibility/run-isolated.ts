@@ -23,7 +23,7 @@ export async function runEngineIsolated(
   fixtures: LoadedCompatibilityCase[],
   options: { workerPath?: string; timeoutMs?: number } = {},
 ): Promise<EngineObservation[]> {
-  const workerPath = options.workerPath ?? resolve(process.cwd(), "dist/spike/worker.js");
+  const workerPath = options.workerPath ?? resolve(process.cwd(), "dist/compatibility/worker.js");
   const timeoutMs = options.timeoutMs ?? 30_000;
   const request: WorkerRequest = { engine, fixtures };
 

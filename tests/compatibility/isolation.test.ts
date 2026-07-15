@@ -1,7 +1,7 @@
 import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
-import type { LoadedCompatibilityCase } from "../../src/spike/contracts.js";
-import { runEngineIsolated } from "../../src/spike/run-isolated.js";
+import type { LoadedCompatibilityCase } from "../../src/compatibility/contracts.js";
+import { runEngineIsolated } from "../../src/compatibility/run-isolated.js";
 
 const smokeFixture: LoadedCompatibilityCase = {
   id: "worker-smoke",

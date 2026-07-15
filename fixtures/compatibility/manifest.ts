@@ -1,6 +1,6 @@
 import { readFile } from "node:fs/promises";
 import { resolve, sep } from "node:path";
-import type { CompatibilityCase, LoadedCompatibilityCase, TargetDiagramType } from "../../src/spike/contracts.js";
+import type { CompatibilityCase, LoadedCompatibilityCase, TargetDiagramType } from "../../src/compatibility/contracts.js";
 
 export const compatibilityManifest: CompatibilityCase[] = [
   {

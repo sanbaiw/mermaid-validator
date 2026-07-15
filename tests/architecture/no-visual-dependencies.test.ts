@@ -15,7 +15,7 @@ const forbiddenPackages = [
   "openai",
 ];
 
-describe("Stage 0 dependency boundary", () => {
+describe("active non-visual dependency boundary", () => {
   it("uses exact direct pins and contains no visual product dependency", async () => {
     const packageJson = JSON.parse(await readFile(resolve("package.json"), "utf8")) as {
       private?: boolean;
@@ -32,7 +32,7 @@ describe("Stage 0 dependency boundary", () => {
 
   it("does not create deferred or later-stage product directories", () => {
     for (const directory of [
-      "src/cli", "src/lsp", "src/extraction", "src/rules", "src/reporters",
+      "src/lsp", "src/extraction", "src/rules", "src/facts", "src/reporters",
       "src/render", "src/geometry", "src/vision", "src/mcp",
     ]) {
       expect(existsSync(resolve(directory)), directory).toBe(false);

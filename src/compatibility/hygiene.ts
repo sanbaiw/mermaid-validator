@@ -34,11 +34,21 @@ function isTextFile(path: string): boolean {
 export async function findRepositoryHygieneProblems(root = process.cwd()): Promise<string[]> {
   const problems: string[] = [];
   for (const path of await repositoryFiles(root)) {
-    if (/^src\/.*\.js(?:\.map)?$/.test(path)) {
-      problems.push(`${path} is a generated JavaScript artifact under src/`);
+    let contents: string | undefined;
+    if (isTextFile(path)) {
+      try {
+        contents = await readFile(resolve(root, path), "utf8");
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code === "ENOENT") continue;
+        throw error;
+      }
     }
-    if (!isTextFile(path)) continue;
-    const lines = (await readFile(resolve(root, path), "utf8")).split(/\r?\n/);
+    if (/^(?:src|tests|fixtures)\/.*\.js(?:\.map)?$/.test(path)
+      || /^vitest\.config\.js(?:\.map)?$/.test(path)) {
+      problems.push(`${path} is a generated JavaScript artifact outside dist/`);
+    }
+    if (contents === undefined) continue;
+    const lines = contents.split(/\r?\n/);
     lines.forEach((line, index) => {
       if (/[ \t]+$/.test(line)) problems.push(`${path}:${index + 1} has trailing whitespace`);
     });

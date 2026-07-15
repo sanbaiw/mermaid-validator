@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import type { LoadedCompatibilityCase } from "../../src/spike/contracts.js";
-import { rejectedObservation } from "../../src/spike/normalize.js";
+import type { LoadedCompatibilityCase } from "../../src/compatibility/contracts.js";
+import { rejectedObservation } from "../../src/compatibility/normalize.js";
 
 const fixture: LoadedCompatibilityCase = {
   id: "structured-error",
