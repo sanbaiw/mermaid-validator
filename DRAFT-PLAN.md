@@ -1,10 +1,10 @@
 # Mermaid Diagram Validator — Implementation Plan
 
 - Status: Stage 0 complete; Stage 1 not started
-- Updated: 2026-07-14
+- Updated: 2026-07-16
 - Runtime: TypeScript on Node.js
 - Package manager: pnpm
-- Repository shape: one package until the public core stabilizes
+- Repository shape: one private package through Stages 1–5; Stage 6 decides which programmatic interfaces become public
 - Active scope: syntax, source mapping, custom rules, semantic rules, CLI/JSON, LSP, and CI integrations
 - Deferred scope: rendering, geometry analysis, layout comparison, screenshots, and model-based visual review
 
@@ -28,7 +28,7 @@ The implementation is progressive. Syntax truth, source mapping, and the custom-
 - Mermaid fenced blocks in Markdown.
 - Flowchart, Sequence, Pie, Class, and State diagrams.
 - Compiler-style terminal diagnostics and versioned JSON output.
-- A public custom-rule API with asynchronous rules and safe fixes.
+- An evolving custom-rule contract with asynchronous rules and safe fixes, proven internally before any package-level programmatic publication.
 - Semantic rules based on versioned facts with completeness metadata.
 - IDE diagnostics and quick fixes through a standalone language server.
 - SARIF/JUnit output and CI integration after the core stabilizes.
@@ -69,6 +69,7 @@ Visual work is recorded in a separate deferred roadmap in Section 8. It adds no 
 | D010 | Defer every visual feature. | The agreed product focus is compiler-like validation and programmable lint rules. Rendering, geometry, and vision do not block that outcome. |
 | D011 | Do not adopt `@mermaid-js/parser` as the sole AST layer. | Its public coverage is not sufficient for all five target diagram families. |
 | D012 | Keep Mermaid CLI outside the active stack. | It is unnecessary for the non-visual product. If visual work is reactivated, it may be used only as a development compatibility oracle because its Node API is not a product runtime contract. |
+| D013 | Keep programmatic interfaces private through Stages 1–5. | Early stages need fast iteration across validation, rules, facts, and delivery adapters without npm compatibility commitments. Stage-local `index.ts` files are repository module seams, not package exports; Stage 6 decides which interfaces receive declarations, package exports, migration policy, and public support. |
 
 Stage 0 validates the ecosystem assumptions behind D001–D003 and records any necessary adjustment in an ADR. The product and scope decisions remain unchanged.
 
@@ -208,6 +209,8 @@ Do not use `optionalDependencies` to smuggle deferred or experimental integratio
 
 ## 6. Active delivery stages
 
+The `v0.1` through `v0.4` release cuts below are internal version milestones, not npm publication commitments. The package remains private and exposes no supported package-level programmatic entry point through Stage 5. Stage 6 owns the decision to publish and stabilize any external interface.
+
 ### Stage 0 — Compatibility and reuse spike
 
 Status: Completed again on 2026-07-14 after evidence hardening and local Node 22/24 verification. Stage 1 has not started.
@@ -248,10 +251,11 @@ Work:
 - Support `.mmd` and `.mermaid` files only.
 - Add terminal and versioned JSON reporters.
 - Add `--format`, version reporting, and deterministic exit codes.
+- Declare the future `mermaid-validator` package bin while testing Stage 1 through the built entry directly; installed-package smoke coverage belongs to Stage 6.
 
 Exit criteria:
 
-- `mermaid-validator diagram.mmd` validates all five target diagram types.
+- `node dist/cli/main.js diagram.mmd` validates all five target diagram types from the private checkout.
 - Syntax errors, unsupported types, and engine failures have different diagnostic codes.
 - JSON output has a documented schema version.
 - Contract tests pass on the Node targets selected in Stage 0.
@@ -276,13 +280,13 @@ Exit criteria:
 - Extraction round-trip tests cover all normalization cases.
 - Standalone and embedded diagrams produce the same canonical verdict.
 
-### Stage 3 — Public custom-rule and fix API
+### Stage 3 — Custom-rule and fix contract
 
 Purpose: prove the product's differentiating capability.
 
 Work:
 
-- Define namespaced, asynchronous rule plugins.
+- Define namespaced, asynchronous rule modules behind a repository-internal registration seam.
 - Validate rule options with schemas.
 - Add rule prerequisites and observable skip reasons.
 - Support severity configuration, per-file overrides, suppressions, and non-overlapping safe fixes.
@@ -292,9 +296,10 @@ Work:
 
 Exit criteria:
 
-- An external test plugin can register a rule without editing a closed internal union.
+- A repository-local external-style fixture plugin can register a rule through the candidate seam without editing a closed internal union.
 - The first rule handles quoted labels, escapes, nested delimiters, Markdown strings, and modern shape syntax fixtures.
 - Fixes are idempotent and never apply across ambiguous ranges.
+- The candidate plugin seam remains private and may evolve until Stage 6 stabilizes it for external use.
 
 Release cut: `v0.2` repository-aware validator with plugins.
 
@@ -364,14 +369,16 @@ Work:
 - Publish a Mermaid compatibility matrix and upgrade procedure.
 - Add process-level time/memory limits, cache policy, security review, and privacy documentation.
 - Stabilize config, rule, JSON, plugin, and LSP contracts.
+- Decide which programmatic interfaces become supported package exports; emit declarations and add `package.json` exports only for those accepted interfaces.
 - Split packages only if actual release-cycle or dependency boundaries now require it.
 
 Exit criteria:
 
-- Clean install and CLI/LSP smoke tests pass on supported platforms.
+- A clean installed package exposes a working `mermaid-validator` command, and installed CLI/LSP smoke tests pass on supported platforms.
 - The compatibility corpus passes against the pinned Mermaid profile.
 - Upgrade tests show how diagnostics change across Mermaid versions.
 - Public APIs have migration and deprecation policies.
+- Every published programmatic entry point has an installed-package consumer test; interfaces that are not accepted remain unexported implementation details.
 - The default installation contains no visual stack dependencies.
 
 Release cut: `v1.0` CI- and editor-ready non-visual validator.

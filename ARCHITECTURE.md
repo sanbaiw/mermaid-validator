@@ -2,8 +2,9 @@
 
 - Status: Accepted repository and module architecture
 - Date: 2026-07-14
+- Updated: 2026-07-16
 - Scope: Active non-visual roadmap in `DRAFT-PLAN.md`
-- Package shape: One TypeScript package until stable interfaces and independent release cycles justify a split
+- Package shape: One private TypeScript package through Stage 5; Stage 6 decides public exports and any justified split
 
 ## Purpose and authority
 
@@ -28,9 +29,9 @@ Use these terms consistently in code, tests, plans, and documentation.
 - **Document Snapshot** — an immutable in-memory view of one host document, identified by URI and language, with optional editor version metadata.
 - **Diagram Validation** — the operation that accepts a Document Snapshot and produces a Validation Result.
 - **Finding** — one stable user-facing diagnostic. It has a code, severity, message, source, location precision, and optional host-document span, help, fixes, and related locations.
-- **Validation Result** — the complete deterministic result of validating one Document Snapshot, including findings and any stage-specific metadata that belongs to the stable public contract.
+- **Validation Result** — the complete deterministic result of validating one Document Snapshot, including findings and any stage-specific metadata that belongs to the active Diagram Validation module contract.
 - **Canonical Syntax** — the official Mermaid verdict for a diagram under the exact-pinned profile accepted in ADR 0001.
-- **Syntax Outcome** — the internal result returned by the Canonical Syntax module before Diagram Validation maps it into Findings. It is not a public product type.
+- **Syntax Outcome** — the internal result returned by the Canonical Syntax module before Diagram Validation maps it into Findings. It never crosses the Canonical Syntax module seam.
 - **Delivery Adapter** — a module that translates an external interaction into a Document Snapshot or translates a Validation Result into an external representation. CLI, LSP, and MCP are delivery adapters.
 - **Compatibility Evidence** — the Stage 0 corpus, observations, comparison engines, and process-isolation harness used to verify assumptions. Compatibility Evidence does not define product contracts.
 - **Semantic Facts** — versioned, completeness-qualified diagram facts used by later rules. They cannot override Canonical Syntax.
@@ -44,11 +45,13 @@ The following rules apply to every active stage.
 3. Delivery adapters depend inward on Diagram Validation. Diagram Validation never depends on a delivery adapter.
 4. Compatibility Evidence may observe the product, but product modules never import Compatibility Evidence contracts or implementations.
 5. Upstream and experimental dependencies are exact-pinned and imported only by project-owned local adapters.
-6. Raw Mermaid, Merman, and mermaid-lint values never cross the public Diagram Validation interface.
-7. The repository remains one package until real public-interface or release-cycle differences justify a split.
-8. Only modules required by the active stage may exist. Future empty directories are prohibited.
-9. Rendering, image, geometry, layout-comparison, and vision modules and dependencies remain prohibited until the deferred visual roadmap is explicitly reactivated.
-10. TypeScript source belongs under `src/`; compiled JavaScript, source maps, and build metadata belong under `dist/`, never beside TypeScript source files.
+6. Raw Mermaid, Merman, and mermaid-lint values never cross the Diagram Validation module interface.
+7. Through Stages 1–5, `index.ts` files define repository module seams only. The package remains private, emits no supported package-level programmatic interface, and may revise those module contracts as implementation evidence accumulates.
+8. Stage 6 decides which interfaces, if any, receive declaration output, `package.json` exports, migration policy, and public compatibility support.
+9. The repository remains one package until real public-interface or release-cycle differences justify a split.
+10. Only modules required by the active stage may exist. Future empty directories are prohibited.
+11. Rendering, image, geometry, layout-comparison, and vision modules and dependencies remain prohibited until the deferred visual roadmap is explicitly reactivated.
+12. TypeScript source belongs under `src/`; compiled JavaScript, source maps, and build metadata belong under `dist/`, never beside TypeScript source files.
 
 ## Module dependency direction
 
@@ -133,7 +136,7 @@ The target tree is staged, not a command to create every path immediately. Stage
 
 The current `src/spike/` and `src/adapters/` modules are Compatibility Evidence. Their `EngineObservation`, fixture, selected-fact, and comparison-engine contracts are not product domain types and must not be imported by `src/validation/` or `src/cli/`.
 
-A Stage 1 ExecPlan should include an explicit, test-preserving migration from `src/spike/` and the Stage 0 engine adapters into `src/compatibility/`, or explain why the move is postponed. The compatibility snapshot and isolation tests must remain green throughout the move. Product work must not be implemented by renaming Stage 0 observation types into public validation types.
+A Stage 1 ExecPlan should include an explicit, test-preserving migration from `src/spike/` and the Stage 0 engine adapters into `src/compatibility/`, or explain why the move is postponed. The compatibility snapshot and isolation tests must remain green throughout the move. Product work must not be implemented by renaming Stage 0 observation types into Diagram Validation module types.
 
 ## Module responsibilities
 
@@ -146,7 +149,7 @@ It owns:
 - `DocumentSnapshot`, `Finding`, `ValidationResult`, and the asynchronous `validateDocument` operation;
 - stable diagnostic codes and location-precision semantics;
 - orchestration of active validation capabilities;
-- translation from internal Syntax Outcomes into public Findings;
+- translation from internal Syntax Outcomes into module-interface Findings;
 - later source-map, rule-prerequisite, fix, and semantic-fact policies when their stages activate.
 
 It does not own:
@@ -155,7 +158,7 @@ It does not own:
 - LSP, MCP, SARIF, JUnit, or other delivery-specific representations;
 - raw Mermaid error objects, JSDOM setup, worker restart mechanics, or comparison-engine observations.
 
-`src/validation/index.ts` is the sole public import seam for code outside `src/validation/`. It exports only stable product types and operations. It must not re-export Canonical Syntax internals or upstream types.
+`src/validation/index.ts` is the sole repository module import seam for code outside `src/validation/`. It exports only the product types and operations needed by active delivery adapters and contract tests, and it must not re-export Canonical Syntax internals or upstream types. Through Stage 5 this is not an npm package export and carries no external compatibility promise.
 
 ### Canonical Syntax: `src/validation/canonical-syntax/`
 
@@ -188,13 +191,13 @@ It owns:
 - terminal and versioned JSON projections;
 - deterministic process exit codes.
 
-It may import only the public Diagram Validation interface. It must not import Mermaid, JSDOM, worker internals, Compatibility Evidence, or future LSP/MCP modules.
+It may import only the Diagram Validation module interface. It must not import Mermaid, JSDOM, worker internals, Compatibility Evidence, or future LSP/MCP modules.
 
 Terminal and JSON output remain inside the CLI module while the CLI is their only real caller. Do not create a top-level `reporters/` module for hypothetical later formats. Promote output into a separate deep module only when a second real caller or independent release contract justifies that seam.
 
 ### Compatibility Evidence: `src/compatibility/`
 
-This supporting module preserves the Stage 0 corpus and proves dependency and engine assumptions. It is not part of the public product interface.
+This supporting module preserves the Stage 0 corpus and proves dependency and engine assumptions. It is not part of the Diagram Validation product module.
 
 It owns:
 
@@ -204,7 +207,7 @@ It owns:
 - direct observations of official Mermaid, mermaid-lint, and Merman;
 - the normalized 27-fixture, 108-observation evidence snapshot.
 
-It may import the public Diagram Validation interface to prove product behavior and may directly import exact-pinned observed engines inside `src/compatibility/engines/`. No production module may import from it.
+It may import the Diagram Validation module interface to prove product behavior and may directly import exact-pinned observed engines inside `src/compatibility/engines/`. No production module may import from it.
 
 The compatibility direct-official observer is an independent oracle for evidence. It does not become the product implementation merely because both use the same exact-pinned Mermaid package and accepted profile.
 
@@ -218,7 +221,7 @@ Add document extraction and offset mapping inside `src/validation/` because both
 
 ### Stage 3: rules and fixes
 
-Add the rule engine and rule implementations inside `src/validation/`. Rules consume project-owned text or fact contracts, never upstream AST values. Configuration discovery remains outside Diagram Validation; validated rule configuration is passed into the in-memory operation. Fix conflict, bounds, and idempotence policies belong to Diagram Validation.
+Add the rule engine and rule implementations inside `src/validation/`. Rules consume project-owned text or fact contracts, never upstream AST values. Configuration discovery remains outside Diagram Validation; validated rule configuration is passed into the in-memory operation. Fix conflict, bounds, and idempotence policies belong to Diagram Validation. Prove extensibility with repository-local external-style fixture plugins, but keep the registration seam private and revisable through Stage 5.
 
 ### Stage 4: LSP delivery adapter
 
@@ -230,7 +233,7 @@ Add a Semantic Facts capability inside `src/validation/`. The project-owned fact
 
 ### Stage 6: hardening and integrations
 
-Add `src/mcp/` as another delivery adapter over Diagram Validation. SARIF and JUnit projections may remain with the CLI if it remains their sole caller. A separate output module requires evidence of multiple callers or an independently stable interface; do not create one merely to mirror an aspirational diagram.
+Add `src/mcp/` as another delivery adapter over Diagram Validation. SARIF and JUnit projections may remain with the CLI if it remains their sole caller. A separate output module requires evidence of multiple callers or an independently stable interface; do not create one merely to mirror an aspirational diagram. Decide which programmatic interfaces have enough evidence to become supported package exports, then emit declarations, add explicit `package.json` exports, and attach migration policy and installed-consumer tests only to those interfaces.
 
 ## Runtime data flow
 
@@ -245,7 +248,7 @@ sequenceDiagram
   participant Worker as Worker entry
   participant Mermaid as Official Mermaid
 
-  User->>CLI: mermaid-validator diagram.mmd
+  User->>CLI: node dist/cli/main.js diagram.mmd
   CLI->>CLI: Read file and create Document Snapshot
   CLI->>Validation: Validate Document Snapshot
   Validation->>Host: Check canonical syntax
@@ -278,14 +281,14 @@ These rules are written so a later architecture fitness check can enforce them m
 | Importer | Allowed project imports |
 |---|---|
 | `src/cli/**` | `src/cli/**`, `src/validation/index.ts` |
-| `src/validation/index.ts` | Public types and operations in the root of `src/validation/` |
+| `src/validation/index.ts` | Module-interface types and operations in the root of `src/validation/` |
 | `src/validation/*.ts` | Other root validation files, `src/validation/canonical-syntax/index.ts`, and capabilities activated for the current stage |
 | `src/validation/canonical-syntax/**` | Files within the same subtree |
 | `src/compatibility/**` | `src/compatibility/**`, `src/validation/index.ts` |
 | `src/lsp/**` | `src/lsp/**`, `src/validation/index.ts` |
 | `src/mcp/**` | `src/mcp/**`, `src/validation/index.ts` |
 
-An import of `src/validation/document.ts`, `findings.ts`, `validate-document.ts`, or any deeper path from outside `src/validation/` is forbidden. External modules import through `src/validation/index.ts` only.
+An import of `src/validation/document.ts`, `findings.ts`, `validate-document.ts`, or any deeper path from outside `src/validation/` is forbidden. Repository modules outside `src/validation/` import through `src/validation/index.ts` only. This rule defines an internal module seam, not a package export.
 
 ### Forbidden edges
 
@@ -317,11 +320,11 @@ Every upstream import remains exact-pinned in `package.json` and hidden behind a
 
 Tests should cross the same interfaces as real callers whenever practical.
 
-- `tests/contract/validation/` imports only `src/validation/index.ts` and verifies the stable in-memory contract.
+- `tests/contract/validation/` imports only `src/validation/index.ts` and verifies the active in-memory module contract.
 - `tests/integration/cli/` invokes the built CLI and verifies files, output formats, exit codes, and process behavior.
 - `tests/compatibility/` imports Compatibility Evidence and verifies engine observations and corpus invariants.
 - `tests/architecture/` checks dependency, package, path, and deferred-scope invariants.
-- Narrow internal tests may deep-import an implementation only from a clearly named `tests/internal/` location or be colocated with that internal module. Such exceptions must not be used as substitutes for public contract tests.
+- Narrow internal tests may deep-import an implementation only from a clearly named `tests/internal/` location or be colocated with that internal module. Such exceptions must not be used as substitutes for module contract tests.
 
 The Stage 0 `tests/architecture/no-visual-dependencies.test.ts` is the first architecture fitness check. Later checks should extend the same principle rather than replacing behavioral tests with file-layout assertions.
 
@@ -358,7 +361,7 @@ Every later ExecPlan that changes source structure or dependencies must:
 1. Reference `ARCHITECTURE.md`, `DRAFT-PLAN.md`, `PLANS.md`, and relevant ADRs.
 2. Restate the module responsibilities and import rules needed for that plan so the plan remains self-contained.
 3. Name every directory it creates and explain why the active stage requires it.
-4. Identify public and internal interfaces and specify which types cross each seam.
+4. Identify module interfaces, internal interfaces, and any externally supported interfaces, and specify which types cross each seam.
 5. Include tests proving dependency direction as well as user-visible behavior.
 6. Preserve Stage 0 Compatibility Evidence or describe a test-preserving migration.
 7. Avoid importing Compatibility Evidence types into product modules.
@@ -373,7 +376,8 @@ The following structures are intentionally rejected for the current product:
 
 - top-level `domain/`, `application/`, and `infrastructure/` directories;
 - one top-level adapter directory containing unrelated Mermaid, CLI, LSP, Merman, and MCP implementations;
-- a public generic parser interface that makes official Mermaid interchangeable with noncanonical engines;
+- a generic parser interface that makes official Mermaid interchangeable with noncanonical engines;
+- package-level programmatic exports before Stage 6 accepts their compatibility and migration obligations;
 - a top-level reporter directory created before multiple real callers exist;
 - product imports from the Stage 0 spike or compatibility observation contracts;
 - a monorepo split based only on the future roadmap;
