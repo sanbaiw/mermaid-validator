@@ -12,6 +12,35 @@ import { describe, expect, it } from "vitest";
 
 interface Edge { source: string; specifier: string; target?: string }
 
+function assertStage1Edges(edges: readonly Edge[]): void {
+  for (const edge of edges) {
+    if (edge.source.startsWith("src/cli/")) {
+      expect(
+        edge.target === undefined
+        || edge.target.startsWith("src/cli/")
+        || edge.target === "src/validation/index.ts",
+        JSON.stringify(edge),
+      ).toBe(true);
+    }
+    if (edge.source.startsWith("src/validation/")) {
+      expect(edge.target?.startsWith("src/cli/") ?? false, JSON.stringify(edge)).toBe(false);
+      expect(edge.target?.startsWith("src/compatibility/") ?? false, JSON.stringify(edge)).toBe(false);
+    }
+    if (/^src\/validation\/[^/]+\.ts$/.test(edge.source)
+      && edge.target?.startsWith("src/validation/canonical-syntax/")) {
+      expect(edge.target, JSON.stringify(edge)).toBe("src/validation/canonical-syntax/index.ts");
+    }
+    if (edge.source.startsWith("src/validation/canonical-syntax/") && edge.target !== undefined) {
+      expect(edge.target.startsWith("src/validation/canonical-syntax/"), JSON.stringify(edge)).toBe(true);
+    }
+    if ((edge.specifier === "mermaid" || edge.specifier === "jsdom")
+      && !edge.source.startsWith("src/compatibility/")) {
+      expect(edge.source).toBe("src/validation/canonical-syntax/mermaid-runtime.ts");
+    }
+    if (edge.specifier === "commander") expect(edge.source.startsWith("src/cli/")).toBe(true);
+  }
+}
+
 describe("Stage 1 import boundaries", () => {
   it("keeps delivery, validation, compatibility, and upstream engine ownership separate", async () => {
     const temporaryRoot = await mkdtemp(resolve(".stage1-import-boundaries-"));
@@ -65,35 +94,19 @@ describe("Stage 1 import boundaries", () => {
         visit(sourceFile);
       }
 
-      for (const edge of edges) {
-        if (edge.source.startsWith("src/cli/")) {
-          expect(
-            edge.target === undefined
-            || edge.target.startsWith("src/cli/")
-            || edge.target === "src/validation/index.ts",
-            JSON.stringify(edge),
-          ).toBe(true);
-        }
-        if (/^src\/validation\/[^/]+\.ts$/.test(edge.source)) {
-          expect(edge.target?.startsWith("src/cli/") ?? false, JSON.stringify(edge)).toBe(false);
-          expect(edge.target?.startsWith("src/compatibility/") ?? false, JSON.stringify(edge)).toBe(false);
-          if (edge.target?.startsWith("src/validation/canonical-syntax/")) {
-            expect(edge.target, JSON.stringify(edge)).toBe("src/validation/canonical-syntax/index.ts");
-          }
-        }
-        if ((edge.specifier === "mermaid" || edge.specifier === "jsdom")
-          && !edge.source.startsWith("src/compatibility/")) {
-          expect(edge.source).toBe("src/validation/canonical-syntax/mermaid-runtime.ts");
-        }
-        if (edge.specifier === "commander") expect(edge.source.startsWith("src/cli/")).toBe(true);
-        if (edge.source.startsWith("src/validation/") || edge.source.startsWith("src/cli/")) {
-          expect(edge.target?.startsWith("src/compatibility/") ?? false, JSON.stringify(edge)).toBe(false);
-        }
-      }
+      assertStage1Edges(edges);
     } finally {
       snapshot.dispose();
       api.close();
       await rm(temporaryRoot, { recursive: true, force: true });
     }
+  });
+
+  it("rejects a Canonical Syntax import from a delivery adapter", () => {
+    expect(() => assertStage1Edges([{
+      source: "src/validation/canonical-syntax/worker-host.ts",
+      specifier: "../../cli/main.js",
+      target: "src/cli/main.ts",
+    }])).toThrow();
   });
 });

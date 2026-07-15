@@ -33,6 +33,9 @@ The first validation command prints nothing and exits `0`. The second prints one
 - [x] (2026-07-15 17:50Z) Added the one-file CLI, terminal and JSON-v1 projections, exact-pinned Commander dependency, private package `bin` mapping, deterministic exit codes, and built-process tests.
 - [x] (2026-07-15 17:53Z) Documented JSON-v1 and CLI behavior, updated the Stage 1 roadmap status, and passed the frozen-install, 65-test full gate, and unchanged compatibility gate on Node 22.20.0 and Node 24.18.0. Stage 2 remains unstarted.
 - [x] (2026-07-15 18:35Z) Fixed the post-review startup-cancellation leak: when cancellation removes the only queued request while the canonical worker is still initializing, the host now kills and forgets that worker; a delayed-ready regression proves the next request starts a fresh worker. The final gate is now 15 files / 66 tests on Node 22.20.0 and Node 24.18.0.
+- [x] (2026-07-15 19:17Z) Resolved the first remaining post-review finding: defer exact closed-shape worker-response validation because the Stage 1 worker and host are compiled and shipped together, while retaining the current structural guard and malformed-IPC coverage.
+- [x] (2026-07-15 19:20Z) Resolved the second remaining post-review finding: defer exhaustive direct tests for every defensive raw-type alias; Stage 1 requires real-runtime normalization evidence for spellings emitted by the pinned official profile and retains the broader Stage 0-proven table without adding a synthetic test seam.
+- [x] (2026-07-15 19:27Z) Resolved the final post-review finding: extend the focused Stage 1 architecture test across all `src/validation/**` files and require Canonical Syntax project imports to remain inside their subtree, without activating the broader future import-graph checker. The final 15-file/67-test gate and unchanged compatibility gate pass on Node 22.20.0 and Node 24.18.0.
 
 ## Surprises & Discoveries
 
@@ -166,13 +169,25 @@ The first validation command prints nothing and exits `0`. The second prints one
   Rationale: Stage 1 still prepares the shebang and `package.json` bin mapping, but the package remains private through Stage 5. A pack/install smoke test would turn an uncommitted publication shape into an accidental acceptance contract. Stage 6 already owns clean-install and installed-package consumer tests and will validate the real bin there.
   Date/Author: 2026-07-16 / User and Codex
 
+- Decision: Do not make the Stage 1 worker-response guard an exact closed-shape protocol validator.
+  Rationale: The worker and host are compiled, versioned, and shipped together, so Stage 1 has no independent or untrusted IPC participant and no version-skew compatibility case. The existing structural guard rejects gross malformed messages and prevents worker-supplied `debugDetail` from crossing IPC. Exact key allowlists, canonical-version equality checks, and exhaustive optional-field validation are deferred until the protocol crosses a real trust or version boundary, or a concrete malformed-field defect demonstrates the need.
+  Date/Author: 2026-07-16 / User and Codex
+
+- Decision: Do not require a direct Stage 1 test for every defensive entry in the private raw-type alias table.
+  Rationale: The exact-pinned official runtime does not naturally emit every Stage 0-proven spelling through the product's authoritative successful-parse path. Stage 1 keeps real-runtime coverage for the spellings observed from official `parse()` and `detectType()` across the target corpus, and retains the additional aliases as low-cost defensive compatibility. A synthetic Mermaid seam or table-only test is deferred until alias normalization becomes an independently meaningful contract or an observed regression demonstrates the need.
+  Date/Author: 2026-07-16 / User and Codex
+
+- Decision: Enforce the active Diagram Validation boundary across every `src/validation/**` file during Stage 1.
+  Rationale: Canonical Syntax is already an active deep module, so preventing it from importing CLI or Compatibility Evidence is current architecture protection rather than speculative future checking. The focused test now also requires Canonical Syntax project imports to remain inside its subtree and proves that a delivery-adapter edge is rejected. Cycle detection, generalized zone fixtures, and the broader import-graph system remain deferred until their planned stage.
+  Date/Author: 2026-07-16 / User and Codex
+
 ## Outcomes & Retrospective
 
 Stage 1 delivered the planned private `v0.1.0` canonical syntax validator without activating later-stage or visual scope. The built CLI validates one `.mmd` or `.mermaid` file for Flowchart, Sequence, Pie, Class, or State; distinguishes syntax, unsupported family, input, and parser-infrastructure outcomes; emits compiler-style terminal lines or documented JSON-v1; and exits with codes `0`, `1`, `2`, or `3` by the accepted precedence.
 
 The repository-internal `src/validation/index.ts` seam returns deterministic findings with original-document UTF-16 spans where Mermaid supplies approximate coordinates. The canonical worker serializes concurrent calls, reuses an accepted/syntax-rejecting worker, restarts after runtime/timeout/crash/protocol failure, honors queued and in-flight cancellation, bounds private stderr to 4,096 UTF-16 code units, and does not leak raw worker output or keep the one-shot CLI alive.
 
-The final gates passed on Node 22.20.0 and Node 24.18.0: `pnpm check` passed 15 test files / 66 tests, and `pnpm compatibility` passed 4 files / 16 tests. Compatibility Evidence stayed at 27 fixtures / 108 observations, the two known `pie-invalid-header` noncanonical mismatches, 5/5 coordinate expectations, and 12/12 complete selected Merman fact summaries. Product runtime dependencies are only Commander `15.0.0`, JSDOM `26.1.0`, and Mermaid `11.16.0`; the package remains private with no `exports` or `types` field. A post-implementation review found and fixed cancellation during worker startup so a completed aborted caller cannot leave the initializing child referenced.
+The final gates passed on Node 22.20.0 and Node 24.18.0: `pnpm check` passed 15 test files / 67 tests, and `pnpm compatibility` passed 4 files / 16 tests. Compatibility Evidence stayed at 27 fixtures / 108 observations, the two known `pie-invalid-header` noncanonical mismatches, 5/5 coordinate expectations, and 12/12 complete selected Merman fact summaries. Product runtime dependencies are only Commander `15.0.0`, JSDOM `26.1.0`, and Mermaid `11.16.0`; the package remains private with no `exports` or `types` field. Post-implementation review fixed cancellation during worker startup, explicitly deferred exact closed-shape IPC validation and exhaustive defensive-alias tests, and completed enforcement of the active Diagram Validation import boundary.
 
 Implementation differed from the written mechanics only where live evidence required it: TypeScript 7's current project/AST APIs replaced the older `ts.createSourceFile` sketch, the source-test worker path maps to the compiled `dist` sibling, and the integration test budget accounts for cold parser initialization. These are test/lifecycle details, not architecture changes, so `ARCHITECTURE.md` and ADR 0001 required no revision. Stage 2 remains unstarted.
 
@@ -289,7 +304,7 @@ Use separate bounded startup and per-request timers, initially 10 seconds each. 
 
 Honor `AbortSignal`. If a queued request is aborted, remove it and reject with an `AbortError`. If the in-flight request is aborted, kill and forget the worker, reject only that call with `AbortError`, and allow the next queued request to start on a fresh worker. Cancellation is not a Finding.
 
-Add fake Stage 1 worker fixtures under `tests/fixtures/workers/` for initialization failure, timeout, caught per-request runtime failure, crash, malformed IPC, mismatched request ID, restart-after-failure, and noisy stdout/stderr. The noisy fixture writes unique markers to both raw streams before returning or failing through IPC. Add `tests/internal/canonical-syntax/worker-host.test.ts` to prove FIFO serialization, no two in-flight requests, each failure classification, cancellation, bounded stderr-tail capture, and a successful request after a discarded or killed worker. Add actual-runtime tests for one valid and one invalid fixture per target family plus the unsupported Gantt fixture. Across those tests or focused table-driven cases, exercise every proven raw alias: `graph`, `flowchart`, `flowchart-v2`, `sequence`, `sequenceDiagram`, `pie`, `class`, `classDiagram`, `state`, `stateDiagram`, and `stateDiagram-v2`. Reuse the Stage 0 corpus files where possible; do not change the compatibility matrix merely to create alias coverage.
+Add fake Stage 1 worker fixtures under `tests/fixtures/workers/` for initialization failure, timeout, caught per-request runtime failure, crash, malformed IPC, mismatched request ID, restart-after-failure, and noisy stdout/stderr. The noisy fixture writes unique markers to both raw streams before returning or failing through IPC. Add `tests/internal/canonical-syntax/worker-host.test.ts` to prove FIFO serialization, no two in-flight requests, each failure classification, cancellation, bounded stderr-tail capture, and a successful request after a discarded or killed worker. Add actual-runtime tests for one valid and one invalid fixture per target family plus the unsupported Gantt fixture. Across those tests, prove normalization for the raw spellings that the pinned official `parse()` and `detectType()` paths actually emit on the target corpus. Retain the broader Stage 0-proven private alias table as defensive compatibility, but do not introduce a synthetic Mermaid seam solely to exercise spellings the official product path does not currently emit. Reuse the Stage 0 corpus files where possible; do not change the compatibility matrix merely to create alias coverage.
 
 This milestone is complete when one process can make several canonical validation calls through the same worker, concurrent calls are serialized, syntax rejection does not restart the worker, runtime failure, timeout, and crash do restart it, the request following a failure succeeds, and a completed caller can exit without a leaked child-process handle.
 
@@ -533,7 +548,7 @@ The final dependency shape should resemble:
     $ pnpm check
     Repository hygiene: clean across tracked and untracked files
     Test Files  15 passed (15)
-    Tests       66 passed (66)
+    Tests       67 passed (67)
 
     $ pnpm compatibility
     Compatibility summary: 27 fixtures, 108 observations
@@ -713,3 +728,9 @@ The only new external runtime dependency is exact-pinned `commander@15.0.0`. Exa
 2026-07-16 / Codex: Implemented and closed Stage 1. Compatibility Evidence moved unchanged, the validation and isolated canonical-worker modules landed, the one-file terminal/JSON CLI and documentation landed, direct runtime dependencies were reduced to Commander/JSDOM/Mermaid, and the initial 65-test plus compatibility gates passed on Node 22.20.0 and Node 24.18.0. No Stage 2, visual, package-publication, commit, tag, or push work was performed.
 
 2026-07-16 / Codex: Fixed the high-priority startup-cancellation lifecycle defect found during post-implementation review. A delayed-ready worker regression proves that aborting the sole queued request discards the initializing child and that the next request starts a fresh worker. The updated 66-test full gate and unchanged compatibility gate pass on Node 22.20.0 and Node 24.18.0.
+
+2026-07-16 / User and Codex: Closed the post-review exact-IPC-validation finding as intentionally deferred. Stage 1 retains its current structural worker-message guard; stricter closed-shape validation requires a real trust boundary, version-skew case, or observed malformed-field defect.
+
+2026-07-16 / User and Codex: Closed exhaustive per-alias test coverage as intentionally deferred. Stage 1 proves the raw spellings emitted by the pinned official runtime on its target corpus and retains the remaining Stage 0-proven aliases defensively without adding a synthetic test seam.
+
+2026-07-16 / User and Codex: Closed the final post-review finding by extending the active Stage 1 import-boundary assertion to every Diagram Validation file and keeping Canonical Syntax project imports inside its subtree. The generalized future import-graph checker remains deferred. The updated 67-test full gate and unchanged compatibility gate pass on Node 22.20.0 and Node 24.18.0.

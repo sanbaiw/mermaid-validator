@@ -241,7 +241,7 @@ Exit criteria:
 
 ### Stage 1 — Canonical syntax CLI
 
-Status: Completed on 2026-07-16. The frozen install, full 15-file/66-test gate, and unchanged 27-fixture/108-observation compatibility gate pass on Node 22.20.0 and Node 24.18.0. Stage 2 remains unstarted.
+Status: Completed on 2026-07-16. The frozen install, full 15-file/67-test gate, and unchanged 27-fixture/108-observation compatibility gate pass on Node 22.20.0 and Node 24.18.0. Stage 2 remains unstarted.
 
 Purpose: deliver the smallest reliable product surface.
 
