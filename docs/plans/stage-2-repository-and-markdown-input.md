@@ -36,12 +36,13 @@ The behavior is visible in two ways. Running `node dist/cli/main.js docs/` print
 - [x] (2026-07-19 14:12Z) Resolved the nineteenth design-review branch with the user: when Mermaid supplies no diagram-relative location, use only the responsible block's host body span with `approximate` precision rather than the fence or whole Markdown document.
 - [x] (2026-07-19 14:14Z) Resolved the twentieth design-review branch with the user: a Markdown parse, extraction, or map-invariant failure yields one atomic whole-document system result, stops any remaining block validation, and does not stop later repository documents.
 - [x] (2026-07-19 14:17Z) Resolved the twenty-first design-review branch with the user: keep package version `0.1.0` through Stage 2 and make JSON-v2 the sole current private output without a JSON-v1 compatibility shim, migration, deprecation period, or stability promise.
-- [ ] Add the exact Stage 2 runtime dependencies, extend the architecture fitness checks, and establish red extraction, mapping, discovery, config, aggregate-output, and CLI contract tests.
-- [ ] Implement the internal Markdown extraction and segment-level offset-map module under `src/validation/markdown/`.
-- [ ] Extend Diagram Validation to validate standalone Mermaid and Markdown Document Snapshots through the same canonical worker and return host-relative findings plus `diagramCount`.
-- [ ] Implement project-owned CLI configuration and repository discovery, then adapt the CLI to validate a deterministic collection of files.
-- [ ] Replace the CLI's single-document JSON-v1 projection with the documented repository-capable JSON-v2 projection while preserving Stage 1 terminal behavior and exit-code meanings.
-- [ ] Update the user and architecture documentation, run the full Node 22/24 gates, record actual evidence in this plan, and stop before Stage 3.
+- [x] (2026-07-19 14:50Z) Added exact runtime dependencies `mdast-util-from-markdown@2.0.3` and `globby@16.2.2`, expanded the architecture fitness checks, and added focused Stage 2 tests.
+- [x] (2026-07-19 14:50Z) Implemented the internal Markdown extraction and segment-level offset-map module under `src/validation/markdown/`.
+- [x] (2026-07-19 14:50Z) Extended Diagram Validation to validate standalone Mermaid and Markdown Document Snapshots through the same canonical worker and return host-relative findings plus `diagramCount`.
+- [x] (2026-07-19 14:50Z) Implemented project-owned CLI configuration and repository discovery, then adapted the CLI to validate deterministic collections with bounded read failures.
+- [x] (2026-07-19 14:50Z) Replaced the CLI's single-document JSON-v1 projection with documented repository-capable JSON-v2 while preserving Stage 1 terminal formatting and exit meanings.
+- [x] (2026-07-19 14:50Z) Updated user, reference, architecture, roadmap, and living-plan documentation; passed frozen install, the full 20-file/115-test gate, and the unchanged compatibility gate on Node 22.20.0 and Node 24.18.0; stopped before Stage 3.
+- [x] (2026-07-20 02:20Z) Hardened the two P1 source-map contracts found during implementation review: implicitly closed LF/CRLF fences now project embedded EOF to the parser's final host boundary, and structural plus host-document bounds are prevalidated before canonical requests and after every outcome projection. The current 20-file/120-test gate passes on Node 22.20.0 and Node 24.18.0 with unchanged compatibility evidence.
 
 ## Surprises & Discoveries
 
@@ -57,11 +58,20 @@ The behavior is visible in two ways. Running `node dist/cli/main.js docs/` print
 - Observation: An unclosed fenced code block is valid CommonMark structure extending to end of file, not an extraction error.
   Evidence: The probe returned a `mermaid` code node with body `flowchart TD\n  A-->B` and an end offset at EOF. Stage 2 must validate that body and map it through EOF; it must not create a sentinel string or a synthetic unclosed-fence Finding.
 
+- Observation: For an implicitly closed fence ending with LF or CRLF, CommonMark omits the terminal line ending from the code value while retaining it in the node's final host boundary.
+  Evidence: The implementation-review regression produced a host length one or two code units beyond the final copied segment. The offset map therefore keeps round-trip segments equal to the code value but projects embedded EOF through `hostBodySpan.endOffset`.
+
 - Observation: A CommonMark-only parse can see fence-looking text inside top-of-file frontmatter as a code block.
   Evidence: A YAML-shaped probe containing an indented Mermaid fence produced a `mermaid` code node. After design review, Stage 2 accepts this low-probability false-positive risk rather than adding an incomplete YAML/TOML boundary scanner; ordinary frontmatter followed by a real block remains required mapping coverage.
 
 - Observation: The live Stage 1 baseline remains healthy before Stage 2 planning changes.
   Evidence: On Node 22.20.0 with pnpm 10.30.1, `pnpm check` exited successfully. `pnpm compatibility` reported 4 passing files, 16 passing tests, 27 fixtures, 108 observations, the same two known noncanonical `pie-invalid-header` mismatches, 5/5 coordinate expectations, and 12/12 complete selected Merman fact summaries.
+
+- Observation: Commander represents an optional variadic positional argument as one array-valued processed argument rather than flattening it.
+  Evidence: The first built CLI run passed the whole path array to `path.resolve()`. Treating `program.processedArgs` as `[string[]?]` fixed single, multiple, and zero-path invocations; unit and built integration tests now cover all three.
+
+- Observation: The CommonMark value-to-host suffix invariant held for every required container, line-ending, and Unicode case without a normalization transform.
+  Evidence: Focused extraction tests pass for list-plus-blockquote nesting, LF, CRLF, BMP and astral Unicode, combining marks, empty bodies, and EOF-closed fences. Every case reconstructs the exact embedded value from copied host slices.
 
 ## Decision Log
 
@@ -167,7 +177,9 @@ The behavior is visible in two ways. Running `node dist/cli/main.js docs/` print
 
 ## Outcomes & Retrospective
 
-This ExecPlan has been authored and the live Stage 1 baseline has been verified. No Stage 2 product implementation or dependency change has begun. At implementation completion, replace this paragraph with the observable repository/Markdown behavior delivered, the final Node 22/24 evidence, the actual test counts, any scope difference, and the remaining Stage 3 boundary.
+Stage 2 is complete. The built CLI accepts files, directories, or no paths; discovers `.mmd`, `.mermaid`, and `.md`; honors nested `.gitignore`, config-root ignores, dot directories, and explicit-file precedence; validates exact-lowercase CommonMark Mermaid fences through the existing official worker; and returns host-document UTF-16 Findings. JSON-v2 is the sole current structured collection output and exposes completeness plus bounded read failures.
+
+After the 2026-07-20 source-map hardening, the current gate is 20 test files and 120 tests on both Node 22.20.0 and Node 24.18.0. The independent compatibility evidence remains 4 files and 16 tests, 27 fixtures and 108 observations, the same two known noncanonical `pie-invalid-header` mismatches, 5/5 coordinate expectations, and 12/12 complete Merman fact summaries. Direct dependencies remain exact; the two Stage 2 packages are runtime-only in their owning adapters, while mermaid-lint and Merman remain development-only. No MDX, Stage 3 rule/fix work, later delivery adapter, package export, or visual dependency was added.
 
 ## Context and Orientation
 
@@ -488,7 +500,24 @@ The accepted Stage 2 dependency pins observed while authoring are:
 
 These are plan inputs, not evidence that the packages have been added to this repository. The implementation must record the final `pnpm list --depth 0` output and any pin change.
 
-At completion, append concise examples of one mapped Markdown terminal Finding, one JSON-v2 summary, the final architecture/dependency evidence, and both runtime test summaries here. Do not paste large snapshots or raw parser messages.
+Final observable evidence:
+
+    $ node dist/cli/main.js tests/fixtures/markdown/valid-repository
+    # status 0; stdout and stderr empty
+
+    $ node dist/cli/main.js tests/fixtures/markdown/embedded-invalid.md
+    .../embedded-invalid.md:5:11: error mermaid/syntax-error: Mermaid syntax error: <bounded detail>
+    # status 1; coordinate names the host Markdown line
+
+    $ node dist/cli/main.js --format json tests/fixtures/markdown/mixed-repository
+    # status 1; schemaVersion 2; complete true; 2 documents; 2 diagrams; 1 finding; 1 error
+
+    $ node dist/cli/main.js --format json --config tests/fixtures/markdown/config/mermaid-validator.config.json
+    # status 0; 1 configured document; 1 diagram; ignored draft absent
+
+Final dependency evidence from `pnpm list --depth 0` shows exact runtime `globby@16.2.2` and `mdast-util-from-markdown@2.0.3`; exact development-only `@mermaid-lint/core@0.35.0` and `@mermanjs/web@0.7.0`; no lilconfig, Zod, later-stage, or visual dependency. The architecture fitness test is now `tests/architecture/module-import-boundaries.test.ts` and enforces the Markdown and discovery adapter ownership.
+
+Both Node 22.20.0 and Node 24.18.0 passed the original frozen-install evidence. After the 2026-07-20 source-map hardening, `pnpm check` passes on both runtimes with 20 files and 120 tests; each run includes the unchanged 4-file/16-test, 27-fixture/108-observation compatibility summary.
 
 ## Interfaces and Dependencies
 
@@ -689,3 +718,7 @@ No supported package-level programmatic interface is introduced. Do not add decl
 2026-07-19: Ratified extraction and map-invariant failures as atomic within one Markdown host. Prevalidation failures prevent all canonical calls; a later outcome-projection failure discards accumulated Findings and stops subsequent calls. Both return one whole-host `system/markdown-extraction-failed` with `diagramCount: 0` and do not stop later repository files.
 
 2026-07-19: Kept package version `0.1.0` through Stage 2 and removed backward-compatibility obligations from the private JSON transition. JSON-v2 directly replaces v1 with no selector, shim, migration, deprecation period, or stability promise; the v1 reference remains implementation history only.
+
+2026-07-19: Implemented and closed Stage 2. Added the two exact adapter-owned dependencies, Markdown extraction and mapping, host validation, config/discovery, collection CLI behavior, JSON-v2, architecture enforcement, checked-in acceptance fixtures, and user/reference documentation. Final frozen-install, 20-file/115-test, and 27-fixture/108-observation gates pass on Node 22.20.0 and Node 24.18.0; Stage 3 remains unstarted.
+
+2026-07-20: Hardened the two P1 source-map findings from implementation review without changing the Stage 2 architecture. Implicitly closed LF/CRLF bodies retain exact copied-segment round trips while embedded EOF maps to the parser's final host boundary. Offset maps now require safe-integer structural coordinates, and root validation rejects any host-out-of-bounds body or projected Finding atomically. The expanded 20-file/120-test gate passes on Node 22.20.0 and Node 24.18.0; compatibility evidence is unchanged.

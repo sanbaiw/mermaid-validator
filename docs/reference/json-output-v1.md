@@ -1,5 +1,7 @@
 # JSON output v1
 
+> Historical reference: the Stage 2 CLI emits JSON-v2 only. There is no v1 selector or compatibility shim. See [JSON output v2](./json-output-v2.md).
+
 `node dist/cli/main.js --format json <file>` writes exactly one JSON object followed by a newline for every completed validation. Command usage and file-input failures write no JSON; they use stderr and exit `2`.
 
 ## Envelope

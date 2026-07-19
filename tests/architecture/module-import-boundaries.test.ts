@@ -12,7 +12,7 @@ import { describe, expect, it } from "vitest";
 
 interface Edge { source: string; specifier: string; target?: string }
 
-function assertStage1Edges(edges: readonly Edge[]): void {
+function assertModuleEdges(edges: readonly Edge[]): void {
   for (const edge of edges) {
     if (edge.source.startsWith("src/cli/")) {
       expect(
@@ -30,28 +30,39 @@ function assertStage1Edges(edges: readonly Edge[]): void {
       && edge.target?.startsWith("src/validation/canonical-syntax/")) {
       expect(edge.target, JSON.stringify(edge)).toBe("src/validation/canonical-syntax/index.ts");
     }
+    if (/^src\/validation\/[^/]+\.ts$/.test(edge.source)
+      && edge.target?.startsWith("src/validation/markdown/")) {
+      expect(edge.target, JSON.stringify(edge)).toBe("src/validation/markdown/index.ts");
+    }
     if (edge.source.startsWith("src/validation/canonical-syntax/") && edge.target !== undefined) {
       expect(edge.target.startsWith("src/validation/canonical-syntax/"), JSON.stringify(edge)).toBe(true);
+    }
+    if (edge.source.startsWith("src/validation/markdown/") && edge.target !== undefined) {
+      expect(edge.target.startsWith("src/validation/markdown/"), JSON.stringify(edge)).toBe(true);
     }
     if ((edge.specifier === "mermaid" || edge.specifier === "jsdom")
       && !edge.source.startsWith("src/compatibility/")) {
       expect(edge.source).toBe("src/validation/canonical-syntax/mermaid-runtime.ts");
     }
+    if (edge.specifier === "mdast-util-from-markdown") {
+      expect(edge.source).toBe("src/validation/markdown/extract-markdown.ts");
+    }
+    if (edge.specifier === "globby") expect(edge.source).toBe("src/cli/discovery.ts");
     if (edge.specifier === "commander") expect(edge.source.startsWith("src/cli/")).toBe(true);
+    if (/^node:(fs|fs\/promises|path)$/.test(edge.specifier)
+      && /^src\/validation\/[^/]+\.ts$/.test(edge.source)) {
+      expect.unreachable(`root Diagram Validation imported filesystem code: ${JSON.stringify(edge)}`);
+    }
   }
 }
 
-describe("Stage 1 import boundaries", () => {
-  it("keeps delivery, validation, compatibility, and upstream engine ownership separate", async () => {
-    const temporaryRoot = await mkdtemp(resolve(".stage1-import-boundaries-"));
+describe("module import boundaries", () => {
+  it("keeps delivery, validation capabilities, compatibility, and upstream ownership separate", async () => {
+    const temporaryRoot = await mkdtemp(resolve(".module-import-boundaries-"));
     await cp(resolve("src"), join(temporaryRoot, "src"), { recursive: true });
     await writeFile(join(temporaryRoot, "tsconfig.json"), JSON.stringify({
       compilerOptions: {
-        target: "ES2023",
-        module: "NodeNext",
-        moduleResolution: "NodeNext",
-        strict: true,
-        noEmit: true,
+        target: "ES2023", module: "NodeNext", moduleResolution: "NodeNext", strict: true, noEmit: true,
       },
       include: ["src/**/*.ts"],
     }));
@@ -59,9 +70,8 @@ describe("Stage 1 import boundaries", () => {
     const snapshot = api.updateSnapshot({ openProjects: [join(temporaryRoot, "tsconfig.json")] });
     try {
       const project = snapshot.getProjects()[0];
-      if (!project) throw new Error("TypeScript did not open the Stage 1 build project");
+      if (!project) throw new Error("TypeScript did not open the build project");
       const edges: Edge[] = [];
-
       for (const file of project.rootFiles.filter((path) => path.includes(`${sep}src${sep}`))) {
         const sourceFile = project.program.getSourceFile(file);
         if (!sourceFile) throw new Error(`TypeScript did not parse ${file}`);
@@ -79,22 +89,16 @@ describe("Stage 1 import boundaries", () => {
         };
         const visit = (node: Node): void => {
           if ((isImportDeclaration(node) || isExportDeclaration(node))
-            && node.moduleSpecifier
-            && isStringLiteral(node.moduleSpecifier)) {
-            addEdge(node.moduleSpecifier);
-          }
+            && node.moduleSpecifier && isStringLiteral(node.moduleSpecifier)) addEdge(node.moduleSpecifier);
           if (isCallExpression(node)
             && node.expression.kind === SyntaxKind.ImportKeyword
             && node.arguments.length === 1
-            && isStringLiteral(node.arguments[0]!)) {
-            addEdge(node.arguments[0]!);
-          }
+            && isStringLiteral(node.arguments[0]!)) addEdge(node.arguments[0]!);
           node.forEachChild(visit);
         };
         visit(sourceFile);
       }
-
-      assertStage1Edges(edges);
+      assertModuleEdges(edges);
     } finally {
       snapshot.dispose();
       api.close();
@@ -102,11 +106,13 @@ describe("Stage 1 import boundaries", () => {
     }
   });
 
-  it("rejects a Canonical Syntax import from a delivery adapter", () => {
-    expect(() => assertStage1Edges([{
-      source: "src/validation/canonical-syntax/worker-host.ts",
-      specifier: "../../cli/main.js",
-      target: "src/cli/main.ts",
-    }])).toThrow();
+  it.each([
+    [{ source: "src/cli/main.ts", specifier: "../validation/markdown/index.js", target: "src/validation/markdown/index.ts" }],
+    [{ source: "src/validation/markdown/extract-markdown.ts", specifier: "../canonical-syntax/index.js", target: "src/validation/canonical-syntax/index.ts" }],
+    [{ source: "src/validation/markdown/offset-map.ts", specifier: "../../cli/main.js", target: "src/cli/main.ts" }],
+    [{ source: "src/validation/validate-document.ts", specifier: "node:fs/promises" }],
+    [{ source: "src/cli/main.ts", specifier: "globby" }],
+  ])("rejects forbidden Stage 2 edge %j", (edge) => {
+    expect(() => assertModuleEdges([edge])).toThrow();
   });
 });

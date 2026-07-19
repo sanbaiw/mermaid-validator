@@ -1,6 +1,6 @@
 # Mermaid Diagram Validator — Implementation Plan
 
-- Status: Stages 0–1 complete; Stage 2 not started
+- Status: Stages 0–2 complete; Stage 3 not started
 - Updated: 2026-07-19
 - Runtime: TypeScript on Node.js
 - Package manager: pnpm
@@ -242,7 +242,7 @@ Exit criteria:
 
 ### Stage 1 — Canonical syntax CLI
 
-Status: Completed on 2026-07-16. The frozen install, full 15-file/67-test gate, and unchanged 27-fixture/108-observation compatibility gate pass on Node 22.20.0 and Node 24.18.0. Stage 2 remains unstarted.
+Status: Completed on 2026-07-16. The frozen install, full 15-file/67-test gate, and unchanged 27-fixture/108-observation compatibility gate passed on Node 22.20.0 and Node 24.18.0 before Stage 2.
 
 Purpose: deliver the smallest reliable product surface.
 
@@ -266,6 +266,8 @@ Exit criteria:
 Release cut: `v0.1` syntax validator.
 
 ### Stage 2 — Repository and Markdown input
+
+Status: Completed on 2026-07-19 and source-map-hardened on 2026-07-20. Frozen install remains established; the current full 20-file/120-test gate and unchanged 27-fixture/108-observation compatibility gate pass on Node 22.20.0 and Node 24.18.0. Markdown extraction, host offset mapping, repository discovery, configuration, and JSON-v2 are active; MDX remains deferred.
 
 Purpose: make the validator useful in documentation repositories.
 

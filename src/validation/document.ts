@@ -1,6 +1,6 @@
 export interface DocumentSnapshot {
   readonly uri: string;
-  readonly languageId: "mermaid";
+  readonly languageId: "mermaid" | "markdown";
   readonly text: string;
   readonly version?: number;
 }

@@ -3,6 +3,7 @@ export type LocationPrecision = "exact" | "approximate" | "document";
 export type BuiltInFindingCode =
   | "mermaid/syntax-error"
   | "mermaid/unsupported-diagram-type"
+  | "system/markdown-extraction-failed"
   | "system/parser-initialization-failed"
   | "system/parser-timeout"
   | "system/parser-runtime-failed"
@@ -32,6 +33,7 @@ export interface Finding {
 export interface ValidationResult {
   readonly documentUri: string;
   readonly documentVersion?: number;
+  readonly diagramCount: number;
   readonly valid: boolean;
   readonly findings: readonly Finding[];
 }

@@ -2,7 +2,7 @@
 
 - Status: Accepted repository and module architecture
 - Date: 2026-07-14
-- Updated: 2026-07-16
+- Updated: 2026-07-19
 - Scope: Active non-visual roadmap in `DRAFT-PLAN.md`
 - Package shape: One private TypeScript package through Stage 5; Stage 6 decides public exports and any justified split
 
@@ -66,7 +66,7 @@ flowchart LR
   COMPAT --> OBSERVED["Observed engines"]
 
   VALIDATION --> SYNTAX["Canonical Syntax"]
-  VALIDATION -.-> EXTRACTION["Document extraction — Stage 2"]
+  VALIDATION --> EXTRACTION["Markdown extraction and offset map"]
   VALIDATION -.-> RULES["Rule engine — Stage 3"]
   VALIDATION -.-> FACTS["Semantic Facts — Stage 5"]
 
@@ -75,13 +75,13 @@ flowchart LR
   FACTS -.-> MERMAN["Merman adapter"]
 ```
 
-Solid arrows are active in Stage 1 or already exist as Compatibility Evidence. Dotted arrows show accepted later-stage direction and do not authorize creating those modules early.
+Solid arrows are active through Stage 2 or already exist as Compatibility Evidence. Dotted arrows show accepted later-stage direction and do not authorize creating those modules early.
 
 There are no sideways calls between delivery adapters. CLI does not call LSP or MCP; LSP does not shell out to CLI. All delivery adapters cross the same Diagram Validation interface.
 
-## Stage 1 target structure
+## Stage 2 active structure
 
-Stage 1 should converge on the following structure. The ExecPlan may refine filenames when implementation evidence requires it, but it must preserve module ownership and dependency direction.
+Stage 2 uses the following product structure. Compatibility Evidence remains under `src/compatibility/` as shown elsewhere in this document.
 
 ```text
 src/
@@ -90,6 +90,11 @@ src/
     document.ts
     findings.ts
     validate-document.ts
+    markdown/
+      index.ts
+      contracts.ts
+      extract-markdown.ts
+      offset-map.ts
     canonical-syntax/
       index.ts
       protocol.ts
@@ -99,9 +104,12 @@ src/
       normalize-mermaid-error.ts
 
   cli/
+    contracts.ts
+    config.ts
+    discovery.ts
     main.ts
     terminal-output.ts
-    json-v1-output.ts
+    json-v2-output.ts
 
   compatibility/
     contracts.ts
@@ -130,7 +138,7 @@ tests/
   architecture/
 ```
 
-The target tree is staged, not a command to create every path immediately. Stage 1 creates only `validation/`, `validation/canonical-syntax/`, `cli/`, and the tests required for the Stage 1 exit criteria. Existing Stage 0 code is migrated only through a behavior-preserving step described in an ExecPlan.
+Markdown extraction and mapping are an internal deep module of Diagram Validation. Configuration, filesystem discovery, file reads, collection aggregation, and JSON-v2 remain CLI delivery responsibilities. Later-stage directories are still absent.
 
 ### Transition from the Stage 0 tree
 
@@ -189,7 +197,9 @@ It owns:
 - supported standalone-file checks and filesystem reads;
 - creation of Document Snapshots;
 - terminal and versioned JSON projections;
-- deterministic process exit codes.
+- deterministic process exit codes;
+- nearest-upward JSON configuration loading, repository discovery, nested ignore handling, and bounded file reads;
+- deterministic multi-document collection aggregation and JSON-v2 projection.
 
 It may import only the Diagram Validation module interface. It must not import Mermaid, JSDOM, worker internals, Compatibility Evidence, or future LSP/MCP modules.
 
@@ -217,7 +227,7 @@ Later stages extend Diagram Validation or add delivery adapters without reversin
 
 ### Stage 2: repository and Markdown input
 
-Add document extraction and offset mapping inside `src/validation/` because both CLI and LSP need identical host-document behavior. File discovery, ignore processing, configuration-file discovery, and filesystem reads remain in the CLI delivery adapter. Extraction produces internal diagram segments mapped to the original Document Snapshot; it does not produce delivery-specific line/column values.
+Stage 2 adds `src/validation/markdown/` for CommonMark fence extraction and segment-level embedded-to-host offset maps. Its project-owned contracts never expose mdast nodes. Root Diagram Validation validates every extracted diagram through Canonical Syntax and returns only host-document Findings. File discovery, ignore processing, configuration-file discovery, collection aggregation, and filesystem reads remain in the CLI delivery adapter.
 
 ### Stage 3: rules and fixes
 
@@ -237,28 +247,33 @@ Add `src/mcp/` as another delivery adapter over Diagram Validation. SARIF and JU
 
 ## Runtime data flow
 
-Stage 1 uses the following call and data flow.
+Stage 2 uses the following call and data flow.
 
 ```mermaid
 sequenceDiagram
   participant User
   participant CLI as CLI adapter
   participant Validation as Diagram Validation
+  participant Markdown as Markdown extraction
   participant Host as Canonical Syntax worker host
   participant Worker as Worker entry
   participant Mermaid as Official Mermaid
 
-  User->>CLI: node dist/cli/main.js diagram.mmd
-  CLI->>CLI: Read file and create Document Snapshot
+  User->>CLI: node dist/cli/main.js docs/
+  CLI->>CLI: Load config, discover, and read files
   CLI->>Validation: Validate Document Snapshot
+  alt Markdown snapshot
+    Validation->>Markdown: Extract blocks and copied-segment maps
+    Markdown-->>Validation: Embedded sources and host maps
+  end
   Validation->>Host: Check canonical syntax
   Host->>Worker: JSON-serializable request
   Worker->>Mermaid: detectType and parse
   Mermaid-->>Worker: acceptance or raw error
   Worker-->>Host: internal Syntax Outcome
   Host-->>Validation: normalized Syntax Outcome
-  Validation-->>CLI: Validation Result with Findings
-  CLI-->>User: terminal or JSON output and exit code
+  Validation-->>CLI: Validation Result with host Findings
+  CLI-->>User: terminal or JSON-v2 collection and exit code
 ```
 
 Error knowledge narrows as it travels outward:
@@ -284,6 +299,7 @@ These rules are written so a later architecture fitness check can enforce them m
 | `src/validation/index.ts` | Module-interface types and operations in the root of `src/validation/` |
 | `src/validation/*.ts` | Other root validation files, `src/validation/canonical-syntax/index.ts`, and capabilities activated for the current stage |
 | `src/validation/canonical-syntax/**` | Files within the same subtree |
+| `src/validation/markdown/**` | Files within the same subtree |
 | `src/compatibility/**` | `src/compatibility/**`, `src/validation/index.ts` |
 | `src/lsp/**` | `src/lsp/**`, `src/validation/index.ts` |
 | `src/mcp/**` | `src/mcp/**`, `src/validation/index.ts` |
@@ -296,6 +312,8 @@ An import of `src/validation/document.ts`, `findings.ts`, `validate-document.ts`
 - Delivery adapters must not import each other.
 - Product modules must not import `src/compatibility/**`, `fixtures/**`, or `tests/**`.
 - `src/validation/*.ts` must not bypass `canonical-syntax/index.ts` to import Canonical Syntax implementation files.
+- `src/validation/*.ts` must not bypass `markdown/index.ts` to import Markdown implementation files.
+- `src/validation/markdown/**` must not import CLI, Canonical Syntax, Compatibility Evidence, or root Validation types.
 - No module may form a circular project import.
 - No future-stage module may be introduced before its stage is active.
 - No visual module or dependency may enter the active graph without an explicit roadmap reactivation decision.
@@ -306,6 +324,8 @@ An import of `src/validation/document.ts`, `findings.ts`, `validate-document.ts`
 |---|---|
 | `mermaid` | `src/validation/canonical-syntax/mermaid-runtime.ts`; compatibility engine observers |
 | `jsdom` | `src/validation/canonical-syntax/mermaid-runtime.ts`; compatibility engine observers |
+| `mdast-util-from-markdown` | `src/validation/markdown/extract-markdown.ts` only |
+| `globby` | `src/cli/discovery.ts` only |
 | `@mermaid-lint/core` | `src/compatibility/engines/**` until a later accepted use is planned |
 | `@mermanjs/web` | `src/compatibility/engines/**`; later the Stage 5 Merman Semantic Facts adapter |
 | CLI framework | `src/cli/**` only |

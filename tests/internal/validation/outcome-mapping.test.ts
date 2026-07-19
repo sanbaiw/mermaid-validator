@@ -14,7 +14,7 @@ describe("syntax outcome mapping", () => {
   it("derives valid from the absence of error findings", () => {
     expect(resultFromSyntaxOutcome(document, {
       kind: "accepted", diagramType: "flowchart", engineVersion: "11.16.0",
-    })).toEqual({ documentUri: document.uri, documentVersion: 4, valid: true, findings: [] });
+    })).toEqual({ documentUri: document.uri, documentVersion: 4, diagramCount: 1, valid: true, findings: [] });
   });
 
   it("maps syntax and unsupported outcomes to stable Mermaid findings", () => {

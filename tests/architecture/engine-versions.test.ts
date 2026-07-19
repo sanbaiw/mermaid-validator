@@ -17,5 +17,15 @@ describe("evaluated engine versions", () => {
       merman: direct["@mermanjs/web"],
     });
     expect(Object.values(ENGINE_VERSIONS).every((version) => /^\d+\.\d+\.\d+$/.test(version))).toBe(true);
+    expect(manifest.dependencies).toMatchObject({
+      globby: "16.2.2",
+      "mdast-util-from-markdown": "2.0.3",
+    });
+    expect(manifest.devDependencies).toMatchObject({
+      "@mermaid-lint/core": "0.35.0",
+      "@mermanjs/web": "0.7.0",
+    });
+    expect(direct).not.toHaveProperty("lilconfig");
+    expect(direct).not.toHaveProperty("zod");
   });
 });
