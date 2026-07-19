@@ -154,11 +154,6 @@ function extractNode(
     });
     embeddedOffset += piece.length;
   }
-  if (embeddedOffset !== value.length) return undefined;
-  const reconstructed = segments.map((segment) => (
-    hostText.slice(segment.hostStartOffset, segment.hostEndOffset)
-  )).join("");
-  if (reconstructed !== value) return undefined;
   const copiedBodyEnd = segments.at(-1)!.hostEndOffset;
   if (copiedBodyEnd > endOffset!) return undefined;
   const finalBodyEnd = hasExplicitClosingFence(hostText, copiedBodyEnd, endOffset!, fence)

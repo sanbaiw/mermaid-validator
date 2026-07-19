@@ -1,17 +1,17 @@
-import { readFile, stat } from "node:fs/promises";
-import { dirname, isAbsolute, parse, resolve } from "node:path";
+import { open } from "node:fs/promises";
+import { dirname, isAbsolute, resolve } from "node:path";
 import { CliInputFailure } from "./contracts.js";
 
 const CONFIG_FILENAME = "mermaid-validator.config.json";
 
-export interface Stage2CliConfig {
+export interface CliConfig {
   readonly ignore?: readonly string[];
 }
 
 export interface LoadedCliConfig {
   readonly rootDirectory: string;
   readonly filepath?: string;
-  readonly config: Stage2CliConfig;
+  readonly config: CliConfig;
 }
 
 function isMissing(error: unknown): boolean {
@@ -31,7 +31,7 @@ function validIgnorePattern(pattern: string): boolean {
   return true;
 }
 
-function parseConfig(text: string, filepath: string): Stage2CliConfig {
+function parseConfig(text: string, filepath: string): CliConfig {
   let value: unknown;
   try {
     value = JSON.parse(text);
@@ -53,17 +53,45 @@ function parseConfig(text: string, filepath: string): Stage2CliConfig {
   return { ignore: record.ignore as string[] };
 }
 
-async function findConfig(cwd: string): Promise<string | undefined> {
+function readConfigSource(filepath: string, missing: "ignore"): Promise<string | undefined>;
+function readConfigSource(filepath: string, missing: "error"): Promise<string>;
+async function readConfigSource(
+  filepath: string,
+  missing: "ignore" | "error",
+): Promise<string | undefined> {
+  let handle;
+  try {
+    handle = await open(filepath, "r");
+  } catch (error) {
+    if (isMissing(error)) {
+      if (missing === "ignore") return undefined;
+      throw new CliInputFailure(`Config file does not exist: ${filepath}`);
+    }
+    throw new CliInputFailure(`Unable to read config file: ${filepath}`);
+  }
+
+  try {
+    if (!(await handle.stat()).isFile()) {
+      if (missing === "ignore") return undefined;
+      throw new CliInputFailure(`Config path is not a file: ${filepath}`);
+    }
+    return await handle.readFile({ encoding: "utf8" });
+  } catch (error) {
+    if (error instanceof CliInputFailure) throw error;
+    throw new CliInputFailure(`Unable to read config file: ${filepath}`);
+  } finally {
+    await handle.close();
+  }
+}
+
+async function findConfig(cwd: string): Promise<{ readonly filepath: string; readonly source: string } | undefined> {
   let directory = resolve(cwd);
   while (true) {
     const candidate = resolve(directory, CONFIG_FILENAME);
-    try {
-      if ((await stat(candidate)).isFile()) return candidate;
-    } catch (error) {
-      if (!isMissing(error)) throw new CliInputFailure(`Unable to inspect config file: ${candidate}`);
-    }
+    const source = await readConfigSource(candidate, "ignore");
+    if (source !== undefined) return { filepath: candidate, source };
     const parent = dirname(directory);
-    if (parent === directory || directory === parse(directory).root) return undefined;
+    if (parent === directory) return undefined;
     directory = parent;
   }
 }
@@ -73,24 +101,18 @@ export async function loadCliConfig(options: {
   readonly explicitPath?: string;
 }): Promise<LoadedCliConfig> {
   const cwd = resolve(options.cwd);
-  const filepath = options.explicitPath === undefined
-    ? await findConfig(cwd)
-    : resolve(cwd, options.explicitPath);
-  if (filepath === undefined) return { rootDirectory: cwd, config: {} };
-
-  let source: string;
-  try {
-    const info = await stat(filepath);
-    if (!info.isFile()) throw new CliInputFailure(`Config path is not a file: ${filepath}`);
-    source = await readFile(filepath, "utf8");
-  } catch (error) {
-    if (error instanceof CliInputFailure) throw error;
-    if (isMissing(error)) throw new CliInputFailure(`Config file does not exist: ${filepath}`);
-    throw new CliInputFailure(`Unable to read config file: ${filepath}`);
+  let loaded: { readonly filepath: string; readonly source: string } | undefined;
+  if (options.explicitPath === undefined) {
+    loaded = await findConfig(cwd);
+  } else {
+    const filepath = resolve(cwd, options.explicitPath);
+    loaded = { filepath, source: await readConfigSource(filepath, "error") };
   }
+  if (loaded === undefined) return { rootDirectory: cwd, config: {} };
+
   return {
-    rootDirectory: dirname(filepath),
-    filepath,
-    config: parseConfig(source, filepath),
+    rootDirectory: dirname(loaded.filepath),
+    filepath: loaded.filepath,
+    config: parseConfig(loaded.source, loaded.filepath),
   };
 }

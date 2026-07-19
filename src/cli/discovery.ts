@@ -1,6 +1,6 @@
 import { stat } from "node:fs/promises";
 import { extname, relative, resolve, sep } from "node:path";
-import { globby } from "globby";
+import { convertPathToPattern, globby } from "globby";
 import { CliInputFailure } from "./contracts.js";
 
 const INPUT_PATTERNS = ["**/*.mmd", "**/*.mermaid", "**/*.md"] as const;
@@ -9,10 +9,6 @@ const HARD_DIRECTORY_NAMES = new Set([".git", "node_modules", "dist"]);
 
 function supported(path: string): boolean {
   return [".mmd", ".mermaid", ".md"].includes(extname(path).toLowerCase());
-}
-
-function toPosix(path: string): string {
-  return path.split(sep).join("/");
 }
 
 function isWithin(root: string, candidate: string): boolean {
@@ -71,8 +67,14 @@ export async function discoverInputFiles(options: {
       if (supported(path)) files.add(resolve(path));
     }
   } else {
+    const explicitInputs = new Map<string, string>();
     for (const suppliedPath of options.explicitPaths) {
       const absolutePath = resolve(cwd, suppliedPath);
+      if (!explicitInputs.has(absolutePath)) explicitInputs.set(absolutePath, suppliedPath);
+    }
+    const configRootPatterns = new Set<string>();
+    const outsideDirectories: string[] = [];
+    for (const [absolutePath, suppliedPath] of explicitInputs) {
       const kind = await inspect(absolutePath);
       if (kind === "file") {
         if (!supported(absolutePath)) {
@@ -83,21 +85,27 @@ export async function discoverInputFiles(options: {
       }
       if (liesInHardDirectory(absolutePath)) continue;
       if (isWithin(configRoot, absolutePath)) {
-        const directoryRelative = toPosix(relative(configRoot, absolutePath));
-        const patterns = directoryRelative === ""
-          ? INPUT_PATTERNS
-          : INPUT_PATTERNS.map((pattern) => `${directoryRelative}/${pattern}`);
-        for (const path of await scan({
-          cwd: configRoot,
-          patterns,
-          ...(options.ignore === undefined ? {} : { ignore: options.ignore }),
-        })) {
-          if (supported(path)) files.add(resolve(path));
+        const relativePath = relative(configRoot, absolutePath);
+        const directoryPattern = relativePath === "" ? "" : convertPathToPattern(relativePath);
+        for (const pattern of INPUT_PATTERNS) {
+          configRootPatterns.add(directoryPattern === "" ? pattern : `${directoryPattern}/${pattern}`);
         }
       } else {
-        for (const path of await scan({ cwd: absolutePath })) {
-          if (supported(path)) files.add(resolve(path));
-        }
+        outsideDirectories.push(absolutePath);
+      }
+    }
+    if (configRootPatterns.size > 0) {
+      for (const path of await scan({
+        cwd: configRoot,
+        patterns: [...configRootPatterns],
+        ...(options.ignore === undefined ? {} : { ignore: options.ignore }),
+      })) {
+        if (supported(path)) files.add(resolve(path));
+      }
+    }
+    for (const directory of outsideDirectories) {
+      for (const path of await scan({ cwd: directory })) {
+        if (supported(path)) files.add(resolve(path));
       }
     }
   }

@@ -116,6 +116,18 @@ describe("runCli", () => {
     });
   });
 
+  it("bounds unexpected config and discovery errors", async () => {
+    let stderr = "";
+    const dependencies: Partial<CliDependencies> = {
+      cwd: () => "/workspace",
+      loadConfig: async () => { throw new Error("private config detail"); },
+      stdout: writer(() => {}),
+      stderr: writer((text) => { stderr += text; }),
+    };
+    await expect(runCli(["diagram.mmd"], dependencies)).resolves.toBe(2);
+    expect(stderr).toBe("Unable to resolve input files\n");
+  });
+
   it("continues later repository documents after a document-local system result", async () => {
     const invocation = await invoke({
       files: ["/workspace/first.md", "/workspace/second.mmd"],

@@ -20,8 +20,25 @@ export function formatJsonV2(
   inputErrors: readonly CliInputError[],
   toolVersion: string,
 ): string {
-  const findings = documents.flatMap((item) => item.result.findings);
   const complete = inputErrors.length === 0;
+  const summary = {
+    documents: documents.length,
+    diagrams: 0,
+    findings: 0,
+    errors: 0,
+    warnings: 0,
+    infos: 0,
+    inputErrors: inputErrors.length,
+  };
+  for (const { result } of documents) {
+    summary.diagrams += result.diagramCount;
+    for (const finding of result.findings) {
+      summary.findings += 1;
+      if (finding.severity === "error") summary.errors += 1;
+      else if (finding.severity === "warning") summary.warnings += 1;
+      else summary.infos += 1;
+    }
+  }
   return `${JSON.stringify({
     schemaVersion: 2,
     tool: { name: "mermaid-diagram-validator", version: toolVersion },
@@ -38,14 +55,6 @@ export function formatJsonV2(
       valid: result.valid,
       findings: result.findings.map(projectFinding),
     })),
-    summary: {
-      documents: documents.length,
-      diagrams: documents.reduce((total, item) => total + item.result.diagramCount, 0),
-      findings: findings.length,
-      errors: findings.filter((finding) => finding.severity === "error").length,
-      warnings: findings.filter((finding) => finding.severity === "warning").length,
-      infos: findings.filter((finding) => finding.severity === "info").length,
-      inputErrors: inputErrors.length,
-    },
+    summary,
   }, null, 2)}\n`;
 }

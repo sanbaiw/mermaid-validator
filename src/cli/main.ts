@@ -11,6 +11,7 @@ import { formatJsonV2 } from "./json-v2-output.js";
 import { formatTerminal } from "./terminal-output.js";
 
 const TOOL_VERSION = "0.1.0";
+const FILE_READ_CONCURRENCY = 16;
 type ExitCode = 0 | 1 | 2 | 3;
 
 export interface CliDependencies {
@@ -34,10 +35,11 @@ const defaults: CliDependencies = {
 };
 
 function exitCodeFor(documents: readonly ValidatedDocument[], inputErrors: readonly CliInputError[]): ExitCode {
-  const findings = documents.flatMap((item) => item.result.findings);
-  if (findings.some((finding) => finding.source === "system" && finding.severity === "error")) return 3;
+  if (documents.some((item) => item.result.findings.some((finding) => (
+    finding.source === "system" && finding.severity === "error"
+  )))) return 3;
   if (inputErrors.length > 0) return 2;
-  if (findings.some((finding) => finding.severity === "error")) return 1;
+  if (documents.some((item) => item.result.findings.some((finding) => finding.severity === "error"))) return 1;
   return 0;
 }
 
@@ -48,6 +50,38 @@ function formatOption(value: string): "terminal" | "json" {
 
 function languageId(path: string): DocumentSnapshot["languageId"] {
   return extname(path).toLowerCase() === ".md" ? "markdown" : "mermaid";
+}
+
+async function readSnapshots(
+  paths: readonly string[],
+  read: CliDependencies["readFile"],
+): Promise<{ readonly snapshots: DocumentSnapshot[]; readonly inputErrors: CliInputError[] }> {
+  const snapshots: DocumentSnapshot[] = [];
+  const inputErrors: CliInputError[] = [];
+  for (let offset = 0; offset < paths.length; offset += FILE_READ_CONCURRENCY) {
+    const batch = await Promise.all(paths.slice(offset, offset + FILE_READ_CONCURRENCY).map(async (path) => {
+      try {
+        return {
+          kind: "snapshot" as const,
+          value: {
+            uri: pathToFileURL(path).href,
+            languageId: languageId(path),
+            text: await read(path, "utf8"),
+          },
+        };
+      } catch {
+        return {
+          kind: "input-error" as const,
+          value: { code: "input/read-failed" as const, path, message: "Unable to read input file" as const },
+        };
+      }
+    }));
+    for (const item of batch) {
+      if (item.kind === "snapshot") snapshots.push(item.value);
+      else inputErrors.push(item.value);
+    }
+  }
+  return { snapshots, inputErrors };
 }
 
 export async function runCli(
@@ -98,26 +132,12 @@ export async function runCli(
       ...(loaded.config.ignore === undefined ? {} : { ignore: loaded.config.ignore }),
     });
   } catch (error) {
-    const message = error instanceof CliInputFailure || error instanceof Error
-      ? error.message
-      : "Unable to resolve input files";
+    const message = error instanceof CliInputFailure ? error.message : "Unable to resolve input files";
     io.stderr.write(`${message}\n`);
     return 2;
   }
 
-  const snapshots: DocumentSnapshot[] = [];
-  const inputErrors: CliInputError[] = [];
-  for (const path of discovered) {
-    try {
-      snapshots.push({
-        uri: pathToFileURL(path).href,
-        languageId: languageId(path),
-        text: await io.readFile(path, "utf8"),
-      });
-    } catch {
-      inputErrors.push({ code: "input/read-failed", path, message: "Unable to read input file" });
-    }
-  }
+  const { snapshots, inputErrors } = await readSnapshots(discovered, io.readFile);
   for (const error of inputErrors.sort((left, right) => left.path.localeCompare(right.path))) {
     io.stderr.write(`${error.path}: ${error.message}\n`);
   }

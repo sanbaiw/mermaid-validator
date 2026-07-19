@@ -78,6 +78,17 @@ describe("input discovery", () => {
     })).resolves.toEqual([join(directory, "a.mmd"), join(directory, "b.md")]);
   });
 
+  it("treats glob metacharacters in explicit directory names literally", async () => {
+    const directory = await root();
+    await file(join(directory, "docs", "[draft]", "guide.md"), "# Guide\n");
+    await file(join(directory, "docs", "d", "other.md"), "# Other\n");
+    await expect(discoverInputFiles({
+      cwd: directory,
+      configRoot: directory,
+      explicitPaths: [join("docs", "[draft]")],
+    })).resolves.toEqual([join(directory, "docs", "[draft]", "guide.md")]);
+  });
+
   it("rejects missing, unsupported, and empty discovery", async () => {
     const directory = await root();
     await file(join(directory, "package.json"), "{}");

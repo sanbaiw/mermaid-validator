@@ -22,6 +22,8 @@ const DEFAULT_DEPENDENCIES: ValidationDependencies = {
   projectSpan: projectEmbeddedSpan,
 };
 
+const MARKDOWN_MAPPING_FAILURE_MESSAGE = "Unable to map Mermaid diagram offsets to Markdown";
+
 const FAILURE_CODES = {
   initialization: "system/parser-initialization-failed",
   timeout: "system/parser-timeout",
@@ -101,6 +103,13 @@ function extractionFailure(document: DocumentSnapshot, message: string): Validat
   }]);
 }
 
+function throwIfAborted(signal: AbortSignal | undefined): void {
+  if (!signal?.aborted) return;
+  const error = new Error("The operation was aborted");
+  error.name = "AbortError";
+  throw error;
+}
+
 function isHostBoundedSpan(span: HostSpan, hostLength: number): boolean {
   return Number.isSafeInteger(span.startOffset)
     && Number.isSafeInteger(span.endOffset)
@@ -143,36 +152,24 @@ async function validateMarkdown(
   options: ValidateOptions,
   dependencies: ValidationDependencies,
 ): Promise<ValidationResult> {
-  if (options.signal?.aborted) {
-    const error = new Error("The operation was aborted");
-    error.name = "AbortError";
-    throw error;
-  }
+  throwIfAborted(options.signal);
   const extraction = dependencies.extractMarkdown(document.text);
   if (extraction.kind === "failure") return extractionFailure(document, extraction.message);
   for (const diagram of extraction.diagrams) {
     if (!isHostBoundedSpan(diagram.hostBodySpan, document.text.length)
       || projectHostSpan(
         diagram,
-        { startOffset: 0, endOffset: 0 },
+        { startOffset: 0, endOffset: diagram.source.length },
         dependencies.projectSpan,
         document.text.length,
-      ) === undefined
-      || projectHostSpan(diagram, {
-        startOffset: diagram.source.length,
-        endOffset: diagram.source.length,
-      }, dependencies.projectSpan, document.text.length) === undefined) {
-      return extractionFailure(document, "Unable to map Mermaid diagram offsets to Markdown");
+      ) === undefined) {
+      return extractionFailure(document, MARKDOWN_MAPPING_FAILURE_MESSAGE);
     }
   }
 
   const findings: Finding[] = [];
   for (const diagram of extraction.diagrams) {
-    if (options.signal?.aborted) {
-      const error = new Error("The operation was aborted");
-      error.name = "AbortError";
-      throw error;
-    }
+    throwIfAborted(options.signal);
     let outcome: SyntaxOutcome;
     try {
       outcome = await dependencies.checkSyntax(
@@ -196,7 +193,7 @@ async function validateMarkdown(
       document.text.length,
     );
     if (hostFinding === undefined) {
-      return extractionFailure(document, "Unable to map Mermaid diagram offsets to Markdown");
+      return extractionFailure(document, MARKDOWN_MAPPING_FAILURE_MESSAGE);
     }
     findings.push(hostFinding);
   }
