@@ -1,7 +1,7 @@
 # Mermaid Diagram Validator — Implementation Plan
 
 - Status: Stages 0–1 complete; Stage 2 not started
-- Updated: 2026-07-16
+- Updated: 2026-07-19
 - Runtime: TypeScript on Node.js
 - Package manager: pnpm
 - Repository shape: one private package through Stages 1–5; Stage 6 decides which programmatic interfaces become public
@@ -25,7 +25,7 @@ The implementation is progressive. Syntax truth, source mapping, and the custom-
 ### Active scope
 
 - Standalone `.mmd` and `.mermaid` files.
-- Mermaid fenced blocks in Markdown.
+- Exact-lowercase `mermaid` fenced blocks in Markdown.
 - Flowchart, Sequence, Pie, Class, and State diagrams.
 - Compiler-style terminal diagnostics and versioned JSON output.
 - An evolving custom-rule contract with asynchronous rules and safe fixes, proven internally before any package-level programmatic publication.
@@ -187,9 +187,10 @@ A browser-backed parsing fallback is a contingency only if Stage 0 proves JSDOM 
 | Parser DOM | `jsdom` `26.1.0` | Stage 1 runtime | JSDOM-only parsing passed the full Stage 0 corpus and now initializes the isolated canonical worker. |
 | CLI | `commander` `15.0.0` | Stage 1 | Keep it a thin adapter over the in-memory core. |
 | Terminal diagnostics | Project-owned compiler-style lines | Stage 1 | Source offsets are projected without a code-frame dependency. |
-| Config/rule schemas | `zod` | Stage 2/3 | Validate user config and rule options. |
-| Config discovery | `lilconfig` | Stage 2 | Prefer alignment with the reusable lint foundation. |
-| File discovery | Reuse upstream support or `fast-glob` | Stage 2 | Add only if the adapter cannot expose adequate discovery. |
+| Markdown structure | `mdast-util-from-markdown` `2.0.3` behind `src/validation/markdown/extract-markdown.ts` | Stage 2 | Exact-pin CommonMark fence structure and source positions without exposing mdast types or changing Mermaid syntax authority. |
+| Config/rule schemas | Project-owned JSON shape check in Stage 2; `zod` for rule schemas | Stage 2/3 | Keep the one-field Stage 2 config dependency-free; introduce Zod when Stage 3 rule options justify it. |
+| Config discovery | Project-owned nearest-upward `mermaid-validator.config.json` search | Stage 2 | Use Node filesystem/path APIs for the single optional repository config and exact `--config` override. |
+| File discovery | `globby` `16.2.2` behind `src/cli/discovery.ts` | Stage 2 | Exact-pin one adapter-owned dependency for recursive discovery and nested `.gitignore` handling. |
 | Semantic facts | `@mermanjs/web` `0.7.0` behind an adapter | Stage 5 | Reuse only with completeness metadata; selected facts matched all 12 valid Stage 0 fixtures after recursive State-document extraction. |
 | LSP server | `vscode-languageserver`, `vscode-languageserver-textdocument` | Stage 4 | Publish a standalone stdio server. |
 
@@ -271,7 +272,7 @@ Purpose: make the validator useful in documentation repositories.
 Work:
 
 - Add file discovery, ignore handling, and configuration loading.
-- Extract Mermaid fenced blocks from `.md` files.
+- Extract exact-lowercase `mermaid` fenced blocks from `.md` files; ignore other casing.
 - Build segment-level embedded-to-parent offset maps.
 - Test multiple blocks, indentation, lists, blockquotes, frontmatter, CRLF, Unicode, and unclosed fences.
 - Add MDX only as a separate substage after real MDX fixtures exist.
@@ -446,7 +447,7 @@ Likely deferred dependencies include Playwright, Chromium, concurrency controls,
 ### Security tests
 
 - Strict Mermaid security configuration.
-- File and URL inputs cannot escape configured repository boundaries.
+- Config-driven file discovery and future URL inputs cannot escape configured repository boundaries; explicitly user-supplied filesystem paths may target outside files or directories.
 - Worker time and memory limits.
 - Malicious or extremely large diagrams return bounded diagnostics rather than crashing the process.
 
