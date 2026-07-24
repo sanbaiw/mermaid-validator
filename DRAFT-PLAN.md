@@ -62,7 +62,7 @@ Visual work is recorded in a separate deferred roadmap in Section 8. It adds no 
 | D003 | Treat Merman (`@mermanjs/web`) as an optional semantic-facts accelerator. | Its facts and editor capabilities may reduce custom parser work, but it is an independent implementation and must remain replaceable. |
 | D004 | Keep one asynchronous in-memory validation core. | CLI, LSP, tests, and optional MCP must produce equivalent results without shelling out to each other. |
 | D005 | Use absolute UTF-16 offsets in the original host document as canonical positions. | Terminal line/column and LSP ranges can be derived consistently, including Unicode and embedded Markdown. |
-| D006 | Make rule prerequisites explicit. | Rules must be skipped when syntax or semantic facts are incomplete rather than guessing and producing false positives. |
+| D006 | Make rule prerequisites explicit. | Rules must not run when required syntax or semantic facts are incomplete; Stage 5 adds facts completeness and observable skip metadata together. |
 | D007 | Start as one package. | Package boundaries should follow stable public APIs and differing release cycles, not the aspirational architecture diagram. |
 | D008 | Use Node.js 24 LTS, TypeScript ESM, and pnpm. | This is a greenfield TypeScript/Node tool and current dependencies require a modern runtime floor. |
 | D009 | Add LSP after source mapping and the first fixable rule. | Editor integration should validate unsaved buffers through the shared core; it should not be bolted onto a mature CLI later. |
@@ -80,7 +80,7 @@ flowchart LR
   D["Document snapshot"] --> E["Extractor and offset map"]
   E --> C["Validation core"]
   C --> P["Official Mermaid parser adapter"]
-  C --> R["Custom rule plugins"]
+  C --> R["Custom rule engine"]
   C --> F["Optional semantic-facts adapter"]
   P --> O["Findings and fixes"]
   R --> O
@@ -158,13 +158,12 @@ Canonical positions are absolute UTF-16 offsets in the host document. Terminal o
 
 ### 4.5 Rule contract
 
-Rules are namespaced, asynchronous, schema-validated, and declare prerequisites:
+Rules are namespaced, asynchronous, schema-validated, and declare prerequisites. Stage 3 supports:
 
 - `text`: raw source is sufficient.
 - `syntax-valid`: official Mermaid accepted the diagram.
-- `facts`: the required semantic facts are present and sufficiently complete.
 
-If a prerequisite is missing or uncertain, the engine skips the rule and records the reason. Safe fixes must be bounded, non-overlapping, and idempotent.
+Stage 5 extends this contract with `facts`, meaning the required semantic facts are present and sufficiently complete, and introduces user-visible skip metadata when incomplete-facts behavior becomes actionable. If a prerequisite is missing or uncertain, the engine does not run the rule. Safe fixes must be bounded, non-overlapping, and idempotent.
 
 ### 4.6 Parser isolation
 
@@ -293,20 +292,20 @@ Work:
 
 - Define namespaced, asynchronous rule modules behind a repository-internal registration seam.
 - Validate rule options with schemas.
-- Add rule prerequisites and observable skip reasons.
-- Support severity configuration, per-file overrides, suppressions, and non-overlapping safe fixes.
+- Enforce rule prerequisites internally. User-visible skip metadata is deferred until Stage 5 Semantic Facts.
+- Support severity configuration, per-file overrides, and non-overlapping safe fixes. Stage 3 rule disabling is config-only; it does not interpret Mermaid comments as rule-control syntax or add a one-shot CLI disable flag.
 - Implement `flowchart/no-markdown-heading-in-label` first.
-- Use semantic facts when available; otherwise use a bounded state-machine scanner rather than one large regular expression.
+- Use a bounded state-machine scanner rather than one large regular expression; Semantic Facts integration remains deferred until Stage 5.
 - Add `--fix`, dry-run fix output, and conflict detection.
 
 Exit criteria:
 
-- A repository-local external-style fixture plugin can register a rule through the candidate seam without editing a closed internal union.
+- A repository-local external-style fixture module can register a rule through the candidate seam without editing a closed internal union.
 - The first rule handles quoted labels, escapes, nested delimiters, Markdown strings, and modern shape syntax fixtures.
 - Fixes are idempotent and never apply across ambiguous ranges.
-- The candidate plugin seam remains private and may evolve until Stage 6 stabilizes it for external use.
+- The candidate rule-module seam remains private and may evolve until Stage 6 decides whether to stabilize it for external use.
 
-Release cut: `v0.2` repository-aware validator with plugins.
+Release cut: `v0.2` repository-aware validator with configurable rules and safe fixes.
 
 ### Stage 4 — LSP adapter
 
@@ -336,6 +335,7 @@ Purpose: add higher-value rules without owning a complete Mermaid grammar.
 Work:
 
 - Define a small, versioned facts interface with completeness metadata.
+- Extend rule prerequisites with `facts` and expose completeness-related skip metadata.
 - Adapt Merman facts only where Stage 0 proves compatibility.
 - Add diagram support incrementally:
   1. Flowchart: nodes, labels, edges, and connected components.
@@ -436,7 +436,7 @@ Likely deferred dependencies include Playwright, Chromium, concurrency controls,
 
 - Valid, invalid, ambiguous, and incomplete-facts cases.
 - Rule option schema failures.
-- Idempotent fixes, overlap conflicts, and suppression behavior.
+- Idempotent fixes and overlap conflicts.
 - Canonical and fast-mode prerequisite behavior.
 
 ### Integration tests
