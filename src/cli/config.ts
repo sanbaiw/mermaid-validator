@@ -1,11 +1,23 @@
 import { open } from "node:fs/promises";
-import { dirname, isAbsolute, resolve } from "node:path";
+import { dirname, isAbsolute, matchesGlob, relative, resolve, sep } from "node:path";
+import {
+  materializeRuleConfiguration,
+  mergeRuleConfigurationPatches,
+  resolveRuleConfigurationPatch,
+  type ResolvedRuleConfiguration,
+  type ResolvedRuleConfigurationPatch,
+} from "../validation/index.js";
 import { CliInputFailure } from "./contracts.js";
 
 const CONFIG_FILENAME = "mermaid-validator.config.json";
 
 export interface CliConfig {
   readonly ignore?: readonly string[];
+  readonly rules?: ResolvedRuleConfigurationPatch;
+  readonly overrides?: readonly {
+    readonly files: readonly string[];
+    readonly rules: ResolvedRuleConfigurationPatch;
+  }[];
 }
 
 export interface LoadedCliConfig {
@@ -19,7 +31,7 @@ function isMissing(error: unknown): boolean {
     && (error as { code?: unknown }).code === "ENOENT";
 }
 
-function validIgnorePattern(pattern: string): boolean {
+function validPattern(pattern: string): boolean {
   if (pattern.length === 0
     || pattern.startsWith("!")
     || isAbsolute(pattern)
@@ -29,6 +41,12 @@ function validIgnorePattern(pattern: string): boolean {
     || pattern.includes("\0")
     || pattern.split("/").includes("..")) return false;
   return true;
+}
+
+function parseRulePatch(input: unknown, filepath: string): ResolvedRuleConfigurationPatch {
+  const resolution = resolveRuleConfigurationPatch(input);
+  if (!resolution.ok) throw new CliInputFailure(`${resolution.message} in config file: ${filepath}`);
+  return resolution.value;
 }
 
 function parseConfig(text: string, filepath: string): CliConfig {
@@ -42,15 +60,37 @@ function parseConfig(text: string, filepath: string): CliConfig {
     throw new CliInputFailure(`Invalid config shape: ${filepath}`);
   }
   const record = value as Record<string, unknown>;
-  if (Object.keys(record).some((key) => key !== "ignore")) {
+  if (Object.keys(record).some((key) => !["ignore", "rules", "overrides"].includes(key))) {
     throw new CliInputFailure(`Unknown config field in: ${filepath}`);
   }
-  if (record.ignore === undefined) return {};
-  if (!Array.isArray(record.ignore)
-    || record.ignore.some((item) => typeof item !== "string" || !validIgnorePattern(item))) {
+  if (record.ignore !== undefined && (!Array.isArray(record.ignore)
+    || record.ignore.some((item) => typeof item !== "string" || !validPattern(item)))) {
     throw new CliInputFailure(`Invalid ignore pattern in config file: ${filepath}`);
   }
-  return { ignore: record.ignore as string[] };
+  const rules = record.rules === undefined ? undefined : parseRulePatch(record.rules, filepath);
+  let overrides: CliConfig["overrides"];
+  if (record.overrides !== undefined) {
+    if (!Array.isArray(record.overrides)) throw new CliInputFailure(`Invalid overrides in config file: ${filepath}`);
+    overrides = record.overrides.map((override) => {
+      if (typeof override !== "object" || override === null || Array.isArray(override)) {
+        throw new CliInputFailure(`Invalid override in config file: ${filepath}`);
+      }
+      const value = override as Record<string, unknown>;
+      if (Object.keys(value).some((key) => !["files", "rules"].includes(key))
+        || !Array.isArray(value.files) || value.files.length === 0
+        || value.files.some((item) => typeof item !== "string" || !validPattern(item))
+        || typeof value.rules !== "object" || value.rules === null || Array.isArray(value.rules)
+        || Object.keys(value.rules as object).length === 0) {
+        throw new CliInputFailure(`Invalid override in config file: ${filepath}`);
+      }
+      return { files: value.files as string[], rules: parseRulePatch(value.rules, filepath) };
+    });
+  }
+  return {
+    ...(record.ignore === undefined ? {} : { ignore: record.ignore as string[] }),
+    ...(rules === undefined ? {} : { rules }),
+    ...(overrides === undefined ? {} : { overrides }),
+  };
 }
 
 function readConfigSource(filepath: string, missing: "ignore"): Promise<string | undefined>;
@@ -82,6 +122,24 @@ async function readConfigSource(
   } finally {
     await handle.close();
   }
+}
+
+export function rulesForPath(
+  loaded: LoadedCliConfig,
+  absolutePath: string,
+): ResolvedRuleConfiguration {
+  let patch = loaded.config.rules ?? {};
+  const relativePath = relative(loaded.rootDirectory, resolve(absolutePath));
+  const normalized = relativePath.split(sep).join("/").replaceAll("\\", "/");
+  const insideRoot = normalized !== ".." && !normalized.startsWith("../") && !isAbsolute(relativePath);
+  if (insideRoot) {
+    for (const override of loaded.config.overrides ?? []) {
+      if (override.files.some((pattern) => matchesGlob(normalized, pattern))) {
+        patch = mergeRuleConfigurationPatches(patch, override.rules);
+      }
+    }
+  }
+  return materializeRuleConfiguration(patch);
 }
 
 async function findConfig(cwd: string): Promise<{ readonly filepath: string; readonly source: string } | undefined> {

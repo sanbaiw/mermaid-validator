@@ -1,7 +1,7 @@
 # Mermaid Diagram Validator — Implementation Plan
 
-- Status: Stages 0–2 complete; Stage 3 not started
-- Updated: 2026-07-19
+- Status: Stages 0–3 complete; Stage 3 review-hardened
+- Updated: 2026-07-26
 - Runtime: TypeScript on Node.js
 - Package manager: pnpm
 - Repository shape: one private package through Stages 1–5; Stage 6 decides which programmatic interfaces become public
@@ -285,6 +285,8 @@ Exit criteria:
 - Standalone and embedded diagrams produce the same canonical verdict.
 
 ### Stage 3 — Custom-rule and fix contract
+
+Status: Completed on 2026-07-25 and review-hardened on 2026-07-26. The private `v0.2.0` cut passes 23 test files/190 tests and the unchanged 27-fixture/108-observation compatibility gate on Node 22.20.0 and Node 24.18.0. Configurable repository-private rules, host-safe fixes, `--fix-dry-run`, and file-isolated `--fix` are active; public plugins and skip metadata remain deferred as planned.
 
 Purpose: prove the product's differentiating capability.
 

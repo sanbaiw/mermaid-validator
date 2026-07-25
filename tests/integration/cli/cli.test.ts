@@ -1,5 +1,5 @@
 import { execFile } from "node:child_process";
-import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { chmod, mkdir, mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { promisify } from "node:util";
@@ -36,6 +36,8 @@ beforeAll(async () => {
   await writeFile(join(temporaryDirectory, "embedded-invalid.md"), [
     "# Guide", "> ```mermaid", "> flowchart TD", ">   A -- B", "> ```", "",
   ].join("\n"));
+  await writeFile(join(temporaryDirectory, "fixable.mmd"), "flowchart LR\r\n  A[\"`# 🚀 Build`\"]\r\n");
+  await writeFile(join(temporaryDirectory, "fixable.md"), "> ```mermaid\n> flowchart LR\n>   A[\"`# Build`\"]\n> ```\n");
 
   validRepository = join(temporaryDirectory, "valid-repository");
   await mkdir(join(validRepository, ".github"), { recursive: true });
@@ -124,6 +126,58 @@ describe("built CLI", () => {
     expect(JSON.parse(invocation.stdout)).toMatchObject({ summary: { documents: 1, diagrams: 1 } });
   });
 
+  it("reports the default rule warning and lets config promote it to an error", async () => {
+    const path = join(temporaryDirectory, "fixable.mmd");
+    const warning = await run([path]);
+    expect(warning).toMatchObject({ status: 0, stderr: "" });
+    expect(warning.stdout).toMatch(/warning flowchart\/no-markdown-heading-in-label:.*\[fixable\]/);
+    const error = await run([
+      "--config", resolve("tests/fixtures/rules/error-config/mermaid-validator.config.json"), path,
+    ]);
+    expect(error.status).toBe(1);
+    expect(error.stdout).toContain("error flowchart/no-markdown-heading-in-label:");
+  });
+
+  it("previews without writing, then applies an idempotent CRLF/Unicode-safe fix", async () => {
+    const path = join(temporaryDirectory, "fixable.mmd");
+    await chmod(path, 0o744);
+    const before = await readFile(path, "utf8");
+    const preview = await run(["--fix-dry-run", "--format", "json", path]);
+    expect(preview.status).toBe(0);
+    expect(await readFile(path, "utf8")).toBe(before);
+    expect(JSON.parse(preview.stdout)).toMatchObject({
+      summary: { warnings: 1 },
+      documents: [{ valid: true, fix: {
+        status: "previewed", editCount: 1,
+        output: "flowchart LR\r\n  A[\"`🚀 Build`\"]\r\n",
+        proposedResult: { valid: true, findings: [] },
+      } }],
+    });
+    const applied = await run(["--fix", path]);
+    expect(applied).toMatchObject({ status: 0, stderr: "" });
+    expect(applied.stdout).toMatch(/applied 1 safe edit\(s\)/);
+    expect(await readFile(path, "utf8")).toBe("flowchart LR\r\n  A[\"`🚀 Build`\"]\r\n");
+    expect((await stat(path)).mode & 0o7777).toBe(0o744);
+    await expect(run(["--fix", path])).resolves.toEqual({ status: 0, stdout: "", stderr: "" });
+  });
+
+  it("applies a host-safe Markdown edit without consuming blockquote prefixes", async () => {
+    const path = join(temporaryDirectory, "fixable.md");
+    const applied = await run(["--fix", path]);
+    expect(applied.status).toBe(0);
+    expect(await readFile(path, "utf8")).toBe("> ```mermaid\n> flowchart LR\n>   A[\"`Build`\"]\n> ```\n");
+  });
+
+  it("keeps an existing syntax-invalid document unchanged in fix mode with exit 1", async () => {
+    const path = join(temporaryDirectory, "invalid-fix.mmd");
+    const source = "flowchart LR\nA -x-> B\n";
+    await writeFile(path, source);
+    const invocation = await run(["--fix", path]);
+    expect(invocation.status).toBe(1);
+    expect(invocation.stdout).toContain("mermaid/syntax-error");
+    expect(await readFile(path, "utf8")).toBe(source);
+  });
+
   it("lets an explicitly named file bypass hard exclusions", async () => {
     const ignored = join(validRepository, "node_modules", "bad.md");
     const invocation = await run([ignored]);
@@ -132,7 +186,7 @@ describe("built CLI", () => {
   });
 
   it("handles version and help without discovery", async () => {
-    await expect(run(["--version"])).resolves.toEqual({ status: 0, stdout: "0.1.0\n", stderr: "" });
+    await expect(run(["--version"])).resolves.toEqual({ status: 0, stdout: "0.2.0\n", stderr: "" });
     const help = await run(["--help"]);
     expect(help.status).toBe(0);
     expect(help.stdout).toContain("Usage: mermaid-validator [options] [paths...]");

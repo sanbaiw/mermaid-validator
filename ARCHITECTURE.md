@@ -2,7 +2,7 @@
 
 - Status: Accepted repository and module architecture
 - Date: 2026-07-14
-- Updated: 2026-07-19
+- Updated: 2026-07-25
 - Scope: Active non-visual roadmap in `DRAFT-PLAN.md`
 - Package shape: One private TypeScript package through Stage 5; Stage 6 decides public exports and any justified split
 
@@ -67,7 +67,7 @@ flowchart LR
 
   VALIDATION --> SYNTAX["Canonical Syntax"]
   VALIDATION --> EXTRACTION["Markdown extraction and offset map"]
-  VALIDATION -.-> RULES["Rule engine — Stage 3"]
+  VALIDATION --> RULES["Rule engine"]
   VALIDATION -.-> FACTS["Semantic Facts — Stage 5"]
 
   SYNTAX --> WORKER["Serialized Mermaid worker"]
@@ -75,13 +75,13 @@ flowchart LR
   FACTS -.-> MERMAN["Merman adapter"]
 ```
 
-Solid arrows are active through Stage 2 or already exist as Compatibility Evidence. Dotted arrows show accepted later-stage direction and do not authorize creating those modules early.
+Solid arrows are active through Stage 3 or already exist as Compatibility Evidence. Dotted arrows show accepted later-stage direction and do not authorize creating those modules early.
 
 There are no sideways calls between delivery adapters. CLI does not call LSP or MCP; LSP does not shell out to CLI. All delivery adapters cross the same Diagram Validation interface.
 
-## Stage 2 active structure
+## Stage 3 active structure
 
-Stage 2 uses the following product structure. Compatibility Evidence remains under `src/compatibility/` as shown elsewhere in this document.
+Stage 3 uses the following product structure. Compatibility Evidence remains under `src/compatibility/` as shown elsewhere in this document.
 
 ```text
 src/
@@ -90,6 +90,17 @@ src/
     document.ts
     findings.ts
     validate-document.ts
+    fix-document.ts
+    rules/
+      index.ts
+      contracts.ts
+      options-schema.ts
+      configuration.ts
+      registry.ts
+      run-rules.ts
+      fixes.ts
+      builtins/
+        no-markdown-heading-in-label.ts
     markdown/
       index.ts
       contracts.ts
@@ -138,13 +149,7 @@ tests/
   architecture/
 ```
 
-Markdown extraction and mapping are an internal deep module of Diagram Validation. Configuration, filesystem discovery, file reads, collection aggregation, and JSON-v2 remain CLI delivery responsibilities. Later-stage directories are still absent.
-
-### Transition from the Stage 0 tree
-
-The current `src/spike/` and `src/adapters/` modules are Compatibility Evidence. Their `EngineObservation`, fixture, selected-fact, and comparison-engine contracts are not product domain types and must not be imported by `src/validation/` or `src/cli/`.
-
-A Stage 1 ExecPlan should include an explicit, test-preserving migration from `src/spike/` and the Stage 0 engine adapters into `src/compatibility/`, or explain why the move is postponed. The compatibility snapshot and isolation tests must remain green throughout the move. Product work must not be implemented by renaming Stage 0 observation types into Diagram Validation module types.
+Markdown extraction, mapping, the Rule Engine, and in-memory fix planning are internal capabilities of Diagram Validation. Configuration, config-root path matching, filesystem discovery, file reads and writes, collection aggregation, and JSON-v2 remain CLI delivery responsibilities. Later-stage directories are still absent.
 
 ## Module responsibilities
 
@@ -247,7 +252,7 @@ Add `src/mcp/` as another delivery adapter over Diagram Validation. SARIF and JU
 
 ## Runtime data flow
 
-Stage 2 uses the following call and data flow.
+Stage 3 uses the following call and data flow.
 
 ```mermaid
 sequenceDiagram
@@ -255,6 +260,7 @@ sequenceDiagram
   participant CLI as CLI adapter
   participant Validation as Diagram Validation
   participant Markdown as Markdown extraction
+  participant Rules as Rule engine
   participant Host as Canonical Syntax worker host
   participant Worker as Worker entry
   participant Mermaid as Official Mermaid
@@ -272,7 +278,12 @@ sequenceDiagram
   Mermaid-->>Worker: acceptance or raw error
   Worker-->>Host: internal Syntax Outcome
   Host-->>Validation: normalized Syntax Outcome
-  Validation-->>CLI: Validation Result with host Findings
+  Validation->>Rules: Source, trusted type, prerequisites, resolved selection
+  Rules-->>Validation: diagram-relative reports and candidate edits
+  Validation-->>CLI: Validation Result or in-memory Document Fix Plan
+  opt --fix after safe planning
+    CLI->>CLI: Write each safe document independently
+  end
   CLI-->>User: terminal or JSON-v2 collection and exit code
 ```
 
@@ -300,6 +311,7 @@ These rules are written so a later architecture fitness check can enforce them m
 | `src/validation/*.ts` | Other root validation files, `src/validation/canonical-syntax/index.ts`, and capabilities activated for the current stage |
 | `src/validation/canonical-syntax/**` | Files within the same subtree |
 | `src/validation/markdown/**` | Files within the same subtree |
+| `src/validation/rules/**` | Files within the same subtree |
 | `src/compatibility/**` | `src/compatibility/**`, `src/validation/index.ts` |
 | `src/lsp/**` | `src/lsp/**`, `src/validation/index.ts` |
 | `src/mcp/**` | `src/mcp/**`, `src/validation/index.ts` |
@@ -313,7 +325,9 @@ An import of `src/validation/document.ts`, `findings.ts`, `validate-document.ts`
 - Product modules must not import `src/compatibility/**`, `fixtures/**`, or `tests/**`.
 - `src/validation/*.ts` must not bypass `canonical-syntax/index.ts` to import Canonical Syntax implementation files.
 - `src/validation/*.ts` must not bypass `markdown/index.ts` to import Markdown implementation files.
+- `src/validation/*.ts` must not bypass `rules/index.ts` to import Rule Engine implementation files.
 - `src/validation/markdown/**` must not import CLI, Canonical Syntax, Compatibility Evidence, or root Validation types.
+- `src/validation/rules/**` must not import CLI, Compatibility Evidence, Markdown internals, Canonical Syntax internals, filesystem/process APIs, or comparison-engine packages.
 - No module may form a circular project import.
 - No future-stage module may be introduced before its stage is active.
 - No visual module or dependency may enter the active graph without an explicit roadmap reactivation decision.
@@ -326,6 +340,7 @@ An import of `src/validation/document.ts`, `findings.ts`, `validate-document.ts`
 | `jsdom` | `src/validation/canonical-syntax/mermaid-runtime.ts`; compatibility engine observers |
 | `mdast-util-from-markdown` | `src/validation/markdown/extract-markdown.ts` only |
 | `globby` | `src/cli/discovery.ts` only |
+| `zod` | `src/validation/rules/options-schema.ts` only |
 | `@mermaid-lint/core` | `src/compatibility/engines/**` until a later accepted use is planned |
 | `@mermanjs/web` | `src/compatibility/engines/**`; later the Stage 5 Merman Semantic Facts adapter |
 | CLI framework | `src/cli/**` only |
@@ -350,9 +365,9 @@ The Stage 0 `tests/architecture/no-visual-dependencies.test.ts` is the first arc
 
 ## Static enforcement contract
 
-A later ExecPlan may add a static import-graph checker. Tool selection is deliberately deferred; the plan may evaluate a dependency-graph tool, restricted-import lint rules, or a small TypeScript-aware local checker. Whichever implementation is chosen must enforce behavior, not merely directory names.
+`tests/architecture/module-import-boundaries.test.ts` is the active focused import-graph checker. It uses the TypeScript AST and resolver already present in the test toolchain; it adds no product dependency or standalone command and runs inside `pnpm check`.
 
-The checker must:
+The checker:
 
 1. Parse TypeScript ESM imports using the repository's NodeNext conventions.
 2. Classify files into the module zones defined in this document.
@@ -361,15 +376,19 @@ The checker must:
 5. Enforce the external dependency ownership allowlist.
 6. Ignore generated `dist/` output and dependency directories.
 7. Provide actionable diagnostics naming the importer, imported file or package, and violated rule.
-8. Run as part of `pnpm check` after its own focused tests prove that allowed fixtures pass and forbidden fixtures fail.
+8. Runs as part of `pnpm check`, with focused synthetic edges proving that allowed imports pass and forbidden imports fail.
 
-The future ExecPlan must include representative violating fixtures for at least these cases:
+Representative violating cases include:
 
 - Diagram Validation importing CLI;
 - CLI deep-importing `validation/canonical-syntax/worker-host.ts`;
 - CLI importing `mermaid` directly;
 - one delivery adapter importing another;
 - product code importing Compatibility Evidence;
+- Compatibility Evidence importing CLI or a Validation deep path;
+- root Validation bypassing the Rules seam;
+- Rules importing delivery, compatibility, Canonical Syntax/Markdown internals, filesystem/process APIs, or comparison engines;
+- Zod imported outside the rule option adapter;
 - a project import cycle.
 
 The checker must not silently exempt all tests. Any test-only exception must be path-scoped and documented.

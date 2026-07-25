@@ -1,0 +1,5 @@
+{
+  "rules": {
+    "flowchart/no-markdown-heading-in-label": "error"
+  }
+}

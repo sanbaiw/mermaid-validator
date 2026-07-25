@@ -8,11 +8,22 @@ export type BuiltInFindingCode =
   | "system/parser-timeout"
   | "system/parser-runtime-failed"
   | "system/parser-crashed"
-  | "system/parser-protocol-error";
+  | "system/parser-protocol-error"
+  | "system/rule-runtime-failed"
+  | "system/rule-protocol-error"
+  | "system/fix-conflict"
+  | "system/fix-protocol-error"
+  | "system/fix-validation-failed"
+  | "system/fix-non-idempotent";
 
 export interface TextSpan {
   readonly startOffset: number;
   readonly endOffset: number;
+}
+
+export interface TextEdit {
+  readonly span: TextSpan;
+  readonly newText: string;
 }
 
 export interface Finding {
@@ -28,6 +39,7 @@ export interface Finding {
     readonly version: string;
   };
   readonly help?: string;
+  readonly fixes?: readonly TextEdit[];
 }
 
 export interface ValidationResult {

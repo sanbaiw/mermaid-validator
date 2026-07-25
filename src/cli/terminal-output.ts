@@ -19,6 +19,7 @@ export function formatTerminal(result: ValidationResult, sourceText: string): st
           const { line, column } = lineAndColumn(sourceText, finding.span.startOffset);
           return `:${line}:${column}`;
         })();
-    return `${path}${location}: ${finding.severity} ${finding.code}: ${finding.message}`;
+    const fixable = (finding.fixes?.length ?? 0) > 0 ? " [fixable]" : "";
+    return `${path}${location}: ${finding.severity} ${finding.code}: ${finding.message}${fixable}`;
   }).join("\n")}\n`;
 }

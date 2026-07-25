@@ -31,12 +31,12 @@ This stage does not publish a package API. It does not load arbitrary JavaScript
 - [x] (2026-07-25) Replaced collection-wide fix preflight blocking with file-level isolation: an unsafe/conflicting/non-idempotent document remains unchanged, while other safely planned documents may still be written; aggregate exit precedence is unchanged.
 - [x] (2026-07-25) Extended file-level isolation through the filesystem boundary: a bounded write failure leaves that document unchanged as reported and does not prevent later safe documents from being attempted; removed the `not-attempted` state.
 - [x] (2026-07-25) Collapsed user-visible fix state to one `fix.status` (`unchanged | previewed | applied | blocked | write-failed`); detailed `DocumentFixStatus` remains internal and failure Findings carry the reason.
-- [ ] Add the exact Stage 3 dependency and architecture/test guardrails without entering a later stage.
-- [ ] Implement the private rule registry, option schemas, configuration resolution, and per-file overrides.
-- [ ] Integrate asynchronous rule execution and internal prerequisite gating into standalone and Markdown Diagram Validation.
-- [ ] Implement `flowchart/no-markdown-heading-in-label` with a bounded scanner and host-safe fixes.
-- [ ] Implement in-memory fix planning, CLI dry-run/application modes, deterministic output, and write-error handling.
-- [ ] Update user/reference/architecture/roadmap documentation and pass the full Node 22/24 acceptance gates.
+- [x] (2026-07-25 04:10Z) Added exact runtime `zod@4.4.3`, extended the focused TypeScript-AST architecture checker with cycle and Stage 3 ownership checks, and updated `ARCHITECTURE.md` before product implementation.
+- [x] (2026-07-25 04:14Z) Implemented the private registry, project-owned option-schema adapter, sparse configuration patches, default materialization, and ordered config-root-relative overrides.
+- [x] (2026-07-25 04:16Z) Integrated asynchronous rule execution and internal `text | syntax-valid` prerequisite gating into standalone and Markdown Diagram Validation with bounded runtime/protocol failures.
+- [x] (2026-07-25 04:18Z) Implemented `flowchart/no-markdown-heading-in-label`, official-Mermaid-backed legacy/modern fixtures, strict Markdown edit projection, deterministic normalization, and conflict tests.
+- [x] (2026-07-25 04:22Z) Implemented in-memory canonical/idempotence fix planning, mutually exclusive CLI dry-run/application modes, actual-content result ownership, deterministic output, and continued writes after a bounded file failure.
+- [x] (2026-07-26) Review-hardened scanner context, narrowed TextEdits to deletion/replacement, added atomic file replacement, updated documentation, and passed the frozen Node 22.20.0 and Node 24.18.0 gates: 23 test files/190 tests, plus the unchanged 27-fixture/108-observation compatibility summary.
 
 ## Surprises & Discoveries
 
@@ -54,6 +54,12 @@ This stage does not publish a package API. It does not load arbitrary JavaScript
 
 - Observation: Zod is not already present directly or transitively in the frozen lockfile.
   Evidence: Planning-time searches of `pnpm-lock.yaml` and `node_modules/.pnpm/lock.yaml` found no Zod entry. The accepted Stage 3 pin must therefore be added explicitly and reviewed in the lockfile.
+
+- Observation: The NVM version directories contain `node` but no `pnpm` shim, so the plan's original reduced `PATH` could start Node but could not run recursive pnpm scripts.
+  Evidence: The first explicit Node 22 `pnpm check` stopped at `sh: pnpm: command not found`; adding `/Users/wangzhihao/Library/pnpm` after the selected NVM `bin` directory preserved the intended Node version and let both frozen gates pass.
+
+- Observation: Running the complete gate through RTK's normal filtered pnpm path once emitted TypeScript JavaScript artifacts beside sources, which repository hygiene rejected before tests.
+  Evidence: The artifacts were all untracked `.js`/`.js.map` files under the hygiene check's existing generated-artifact pattern. After removing only those files, `rtk proxy pnpm check` and the explicit Node gates repeated cleanly without recreating them.
 
 ## Decision Log
 
@@ -117,15 +123,15 @@ This stage does not publish a package API. It does not load arbitrary JavaScript
   Rationale: A rule must not know whether its diagram came from a standalone file or Markdown. Central assignment prevents rule modules from overriding code/source/severity policy.
   Date/Author: 2026-07-22 / Codex.
 
-- Decision: Add `fixes?: readonly TextEdit[]` to `Finding`; every TextEdit is a zero-based half-open UTF-16 host span and replacement text.
-  Rationale: The same host-coordinate edits can drive CLI application and Stage 4 quick fixes. Rules initially create embedded edits, but only validated/projected host edits cross the Diagram Validation interface.
-  Date/Author: 2026-07-22 / Codex.
+- Decision: Add `fixes?: readonly TextEdit[]` to `Finding`; every Stage 3 TextEdit is a non-empty zero-based half-open UTF-16 host span and replacement text. Zero-length insertion edits are deferred until a concrete rule or adapter requires their Markdown boundary semantics.
+  Rationale: The same host-coordinate deletions and replacements can drive CLI application and later quick fixes. Rejecting insertion edits keeps the Stage 3 safety proof limited to ranges copied contiguously from the source; rules initially create embedded edits, but only validated/projected host edits cross the Diagram Validation interface.
+  Date/Author: 2026-07-26 / User and Codex; supersedes the broader 2026-07-22 TextEdit decision.
 
 - Decision: An embedded TextEdit is safe to project only when its replaced range lies wholly inside one copied offset-map segment; a cross-segment edit is omitted rather than widened across Markdown container prefixes.
   Rationale: Existing span projection is adequate for diagnostics but a replacement must not delete blockquote/list prefixes or normalized gaps. The first rule's single-line prefix deletion satisfies the stricter requirement.
   Date/Author: 2026-07-22 / Codex.
 
-- Decision: A document fix plan is all-or-nothing for validation safety. Any original canonical/system error blocks output while preserving the original Finding/exit classification; invalid edit bounds, same-offset insertions, overlaps, any post-fix canonical/system error, or a second pass proposing any safe edit from the complete enabled rule selection also blocks output with the appropriate fix failure.
+- Decision: A document fix plan is all-or-nothing for validation safety. Any original canonical/system error blocks output while preserving the original Finding/exit classification; invalid or zero-length edit bounds, overlaps, any post-fix canonical/system error, or a second pass proposing any safe edit from the complete enabled rule selection also blocks output with the appropriate fix failure.
   Rationale: A custom-rule fixer must operate only on a canonically validated document and must refuse ambiguous ranges, conflicts, incomplete validation, syntax regressions, and transformations that make a second complete fix run change the file again. Merely asking `--fix` must not upgrade a normal Mermaid syntax error from exit `1` to a system failure. Applying edits in descending offset order is deterministic only after the complete set passes these checks.
   Date/Author: 2026-07-22 / Codex.
 
@@ -148,6 +154,10 @@ This stage does not publish a package API. It does not load arbitrary JavaScript
 - Decision: Continue processing later safe documents after a filesystem write failure. Record bounded `input/write-failed` for the affected path, retain its original Validation Result, and aggregate exit `2` unless a system error raises it to `3`.
   Rationale: This keeps all Stage 3 application failures file-scoped, removes fail-fast coordination and the `not-attempted` state, and still reports exactly what reached disk.
   Date/Author: 2026-07-25 / User and Codex.
+
+- Decision: Apply each changed document through a same-directory temporary file followed by atomic rename, preserving the existing permission mode and cleaning owned temporary state on preparation or rename failure.
+  Rationale: Directly truncating the target before a write completes can leave partially changed content while reporting the original Validation Result. Preparing and syncing a sibling temporary file keeps the target unchanged on preparation failure and makes a successful rename the single application boundary. Stage 3 does not promise ACL/xattr/ownership/hard-link preservation, concurrent-edit detection, symlink-referent writes, or directory-fsync crash durability.
+  Date/Author: 2026-07-26 / Codex after implementation review.
 
 - Decision: In dry-run, the top-level document result and collection summary describe the unchanged file; `fix.proposedResult` describes `fix.output` and uses offsets into that proposed text.
   Rationale: A preview must not make existing Findings disappear or imply that disk changed. Nesting the revalidated proposal preserves both truths and avoids mixing coordinate spaces.
@@ -173,11 +183,19 @@ This stage does not publish a package API. It does not load arbitrary JavaScript
   Rationale: A Flowchart-only rule should be omitted immediately for a known non-Flowchart type, while an unavailable trusted type still requires the prerequisite gate before the engine can decide whether to invoke it. Both paths remain internal and produce no extra result record.
   Date/Author: 2026-07-22 / Codex and reviewer agent.
 
+- Decision: Add `src/validation/rules/configuration.ts` as a private implementation file while keeping every external caller on `src/validation/rules/index.ts` or `src/validation/index.ts`.
+  Rationale: Separating sparse patch parsing/materialization from registry construction kept both files focused without changing module ownership or the accepted Rules seam. The architecture checker proves that root Validation and CLI do not deep-import it.
+  Date/Author: 2026-07-25 / Codex.
+
+- Decision: Advance the private package/tool version to `0.2.0` at Stage 3 closeout.
+  Rationale: The roadmap names Stage 3 as the internal `v0.2` release cut, and the built CLI now demonstrates the configurable-rule and safe-fix behavior required by that cut. This does not publish or stabilize a package API.
+  Date/Author: 2026-07-25 / Codex.
+
 ## Outcomes & Retrospective
 
 Planning outcome: this document turns the Stage 3 roadmap paragraph into a staged, testable contract while preserving the completed Stage 2 baseline. It fixes the private registration boundary, exact config grammar, prerequisite gating, fix safety, and user-visible CLI behavior that would otherwise be left to implementation-time guesses.
 
-Implementation outcome: pending. On completion, record the files and dependency versions actually added, final test counts on Node 22 and 24, observable CLI transcripts, any deviations from the scanner/config/fix contracts, and whether Stage 3 reached its `v0.2` internal release cut. Do not mark Stage 3 complete merely because the plan exists.
+Implementation outcome: complete and review-hardened. Stage 3 reached its private `v0.2.0` release cut with one new runtime dependency, `zod@4.4.3`, isolated in `src/validation/rules/options-schema.ts`. The repository now has a private open registry seam, strict rule config and overrides, asynchronous prerequisite-gated execution, host-safe deletion/replacement TextEdits, a delimiter-aware first Flowchart rule, in-memory canonical and whole-selection idempotence checks, and file-isolated CLI preview/application through atomic replacement. Both supported Node targets pass 23 test files/190 tests; Compatibility Evidence remains 27 fixtures/108 observations. No LSP, Semantic Facts, public plugin loader/export, rendering, geometry, image, layout, or vision scope entered the graph.
 
 ## Context and Orientation
 
@@ -195,7 +213,7 @@ In this plan, a rule module is a repository-private object with a namespaced id,
 
 A rule selection is the already validated set of per-rule severities and parsed options passed to one validation call. CLI obtains it by layering the config's base `rules` with every matching override in declaration order. Stage 3 prerequisite gating is internal: an unavailable prerequisite prevents a rule invocation without adding a Finding or a separate result record.
 
-A TextEdit replaces `document.text.slice(startOffset, endOffset)` with `newText`. Two non-empty edits overlap when their half-open ranges intersect. Two insertions at the same offset also conflict. A document fix plan is the result of collecting candidate edits, validating/mapping/deduplicating them, rejecting conflicts, applying them from highest start offset to lowest, revalidating the changed snapshot, and proving a second planning pass would not propose another edit from an applied rule.
+A TextEdit replaces `document.text.slice(startOffset, endOffset)` with `newText`. Stage 3 requires `endOffset > startOffset`, so edits can delete or replace existing text but cannot insert at a zero-length boundary. Two edits overlap when their half-open ranges intersect. A document fix plan is the result of collecting candidate edits, validating/mapping/deduplicating them, rejecting conflicts, applying them from highest start offset to lowest, revalidating the changed snapshot, and proving a second planning pass would not propose another edit from an applied rule.
 
 The planning baseline is commit `c721bd0` on `main`, one commit ahead of `origin/main`. The worktree already contains an unrelated modified `README.md` and unrelated untracked `docs/performance/`; preserve them. This ExecPlan is the only Stage 3 artifact created by planning. At planning time Node 22.20.0, pnpm 10.30.1, `pnpm check` (20 files/122 tests), and `pnpm compatibility` (4 files/16 tests, 27 fixtures/108 observations) pass.
 
@@ -263,7 +281,7 @@ Within a recognized Markdown String node label, report each line whose content b
 
 Offer one TextEdit whose span is exactly the Finding span and whose replacement is empty. Do not offer an edit for an ambiguous delimiter, a cross-line/cross-segment marker, or any report whose exact host range cannot be proven. Multiple definite headings create multiple non-overlapping Findings/edits. Applying all edits preserves every other code unit, including line endings and Markdown container prefixes.
 
-Implement pure edit normalization and conflict detection in `src/validation/rules/fixes.ts`. Validate again at the host boundary, deterministically deduplicate byte-for-byte identical edits from the same rule/Finding, and treat partially/fully overlapping replacements or multiple insertions at one offset as conflicts. Apply an accepted edit list in descending `startOffset`, then descending `endOffset`, without normalizing host text.
+Implement pure edit normalization and conflict detection in `src/validation/rules/fixes.ts`. Validate again at the host boundary, reject every zero-length insertion edit, deterministically deduplicate byte-for-byte identical edits from the same rule/Finding, and treat partially/fully overlapping replacements as conflicts. Apply an accepted edit list in descending `startOffset`, then descending `endOffset`, without normalizing host text.
 
 At the end of this milestone, internal scanner tests cover every exit-criterion syntax family, property-style tests or a deterministic corpus prove termination and bounds on malformed delimiter strings, and contract tests prove exact standalone and Markdown host edits. Applying the built-in rule once removes every definite marker; applying it again yields no edit and identical text.
 
@@ -277,7 +295,7 @@ Extend Commander with mutually exclusive `--fix` and `--fix-dry-run`. Both are v
 
 Dry-run performs no filesystem mutation. Terminal mode reports original-file diagnostics and one deterministic status line per changed file, `<path>: would apply <n> safe edit(s)`; unchanged files add no status. JSON-v2 keeps the top-level document result and collection summary tied to original file contents. Its optional document `fix` object contains one final `status`, edit count, sorted host edits, `output`, and `proposedResult` for a changed preview. `proposedResult` is the revalidation of `output`, and every span inside it is relative to `output`, not the original file. A changed dry-run uses `status: "previewed"`; unchanged uses `unchanged`; a non-writable plan uses `blocked` and reports the appropriate original or fix-failure result. Tests compare file contents before and after the complete command and cover an early edit that shifts a later proposed Finding so the two coordinate spaces cannot be conflated.
 
-Apply mode writes only `changed` outputs. Add a CLI-owned `writeFile` dependency for tests and use UTF-8 without normalizing line endings. Precompute every plan before the first write, then process documents in deterministic path order. A `conflict`, `invalid`, `unsafe`, or `non-idempotent` plan blocks only its own document, reports `failureResult ?? originalResult` with `status: "blocked"`, and does not prevent another `changed` plan from being written. Unchanged documents report their original result with `status: "unchanged"`. A successful write uses `proposedResult` and `status: "applied"`. A write failure becomes bounded `input/write-failed`; that document retains its original result with `status: "write-failed"`, while earlier successful writes retain proposed results and later safe documents are still attempted. JSON sets `complete: false`, and exit precedence remains system `3`, then input `2`, then validation error `1`, then success `0`. Document that process/filesystem failures can leave a subset changed and that version control or a rerun is the recovery path; cross-file atomicity belongs to production hardening, not Stage 3.
+Apply mode writes only `changed` outputs. Add a CLI-owned injectable atomic replacement operation for tests and use UTF-8 without normalizing line endings. The default implementation stats the target, creates an exclusive same-directory temporary file, writes and syncs the proposed content, preserves the target mode, closes the temporary file, then renames it over the target; preparation and rename failures clean owned temporary state. Precompute every plan before the first replacement, then process documents in deterministic path order. A `conflict`, `invalid`, `unsafe`, or `non-idempotent` plan blocks only its own document, reports `failureResult ?? originalResult` with `status: "blocked"`, and does not prevent another `changed` plan from being written. Unchanged documents report their original result with `status: "unchanged"`. A successful replacement uses `proposedResult` and `status: "applied"`. A replacement failure becomes bounded `input/write-failed`; because the target was not replaced, that document retains its original result with `status: "write-failed"`, while earlier successful replacements retain proposed results and later safe documents are still attempted. JSON sets `complete: false`, and exit precedence remains system `3`, then input `2`, then validation error `1`, then success `0`. Document that process/filesystem failures can leave a subset changed and that version control or a rerun is the recovery path; cross-file atomicity belongs to production hardening, not Stage 3.
 
 After successful writes, report each applied document's post-fix result. Terminal mode emits `<path>: applied <n> safe edit(s)` only after a successful write; it never emits that line for blocked or failed documents. JSON includes the final status and edit count but omits full `output` in apply mode because the file is the source of truth. A default-warning document fixed cleanly exits `0`. An error-severity rule fixed cleanly also exits `0` because the reported state is post-fix. A conflict/system fix failure exits `3` even when another safe document was applied; a write failure exits `2` unless a system error exists.
 
@@ -369,17 +387,17 @@ Exercise failure and compatibility behavior through tests plus safe copied fixtu
 
 The valid canonical fixture remains silent except for any intentionally applicable default rule and exits `0`; the existing minimal fixture should have no rule Finding. The invalid fixture retains only its Mermaid syntax Finding, does not invoke the enabled syntax-valid rule, and offers no fix. Invalid config writes one bounded stderr line, no JSON, and exits `2`. After closeout, `--version` prints `0.2.0` without starting the parser or discovering files.
 
-Run the final gate with explicit absolute NVM paths so the commands do not depend on shell-selected Node and do not repurpose broad environment variables:
+Run the final gate with explicit absolute NVM and pnpm paths so the commands do not depend on shell-selected Node and do not repurpose broad environment variables. The personal pnpm shim directory is required because the NVM version directories do not contain pnpm shims:
 
-    rtk env PATH="/Users/wangzhihao/.nvm/versions/node/v22.20.0/bin:/usr/bin:/bin:/usr/sbin:/sbin" node --version
-    rtk env PATH="/Users/wangzhihao/.nvm/versions/node/v22.20.0/bin:/usr/bin:/bin:/usr/sbin:/sbin" pnpm install --frozen-lockfile
-    rtk env PATH="/Users/wangzhihao/.nvm/versions/node/v22.20.0/bin:/usr/bin:/bin:/usr/sbin:/sbin" pnpm check
-    rtk env PATH="/Users/wangzhihao/.nvm/versions/node/v22.20.0/bin:/usr/bin:/bin:/usr/sbin:/sbin" pnpm compatibility
+    rtk env PATH="/Users/wangzhihao/.nvm/versions/node/v22.20.0/bin:/Users/wangzhihao/Library/pnpm:/usr/bin:/bin:/usr/sbin:/sbin" node --version
+    rtk env PATH="/Users/wangzhihao/.nvm/versions/node/v22.20.0/bin:/Users/wangzhihao/Library/pnpm:/usr/bin:/bin:/usr/sbin:/sbin" pnpm install --frozen-lockfile
+    rtk env PATH="/Users/wangzhihao/.nvm/versions/node/v22.20.0/bin:/Users/wangzhihao/Library/pnpm:/usr/bin:/bin:/usr/sbin:/sbin" pnpm check
+    rtk env PATH="/Users/wangzhihao/.nvm/versions/node/v22.20.0/bin:/Users/wangzhihao/Library/pnpm:/usr/bin:/bin:/usr/sbin:/sbin" pnpm compatibility
 
-    rtk env PATH="/Users/wangzhihao/.nvm/versions/node/v24.18.0/bin:/usr/bin:/bin:/usr/sbin:/sbin" node --version
-    rtk env PATH="/Users/wangzhihao/.nvm/versions/node/v24.18.0/bin:/usr/bin:/bin:/usr/sbin:/sbin" pnpm install --frozen-lockfile
-    rtk env PATH="/Users/wangzhihao/.nvm/versions/node/v24.18.0/bin:/usr/bin:/bin:/usr/sbin:/sbin" pnpm check
-    rtk env PATH="/Users/wangzhihao/.nvm/versions/node/v24.18.0/bin:/usr/bin:/bin:/usr/sbin:/sbin" pnpm compatibility
+    rtk env PATH="/Users/wangzhihao/.nvm/versions/node/v24.18.0/bin:/Users/wangzhihao/Library/pnpm:/usr/bin:/bin:/usr/sbin:/sbin" node --version
+    rtk env PATH="/Users/wangzhihao/.nvm/versions/node/v24.18.0/bin:/Users/wangzhihao/Library/pnpm:/usr/bin:/bin:/usr/sbin:/sbin" pnpm install --frozen-lockfile
+    rtk env PATH="/Users/wangzhihao/.nvm/versions/node/v24.18.0/bin:/Users/wangzhihao/Library/pnpm:/usr/bin:/bin:/usr/sbin:/sbin" pnpm check
+    rtk env PATH="/Users/wangzhihao/.nvm/versions/node/v24.18.0/bin:/Users/wangzhihao/Library/pnpm:/usr/bin:/bin:/usr/sbin:/sbin" pnpm compatibility
 
 Finish with evidence and hygiene inspection:
 
@@ -406,9 +424,9 @@ For the first rule, only officially valid Flowchart node Markdown Strings are in
 
 For Markdown, rule Findings refer to the original host URI and UTF-16 offsets. Diagnostic spans use the existing segment projection. Fixes are emitted only for a contiguous copied segment and never consume blockquote/list indentation, fences, frontmatter, prose, or an adjacent block. Multiple diagrams retain source order. Mapping failure behavior from Stage 2 remains atomic and bounded.
 
-For fix safety, every edit is safe-integer, ordered, bounded, deterministic, and represented in host offsets. Identical edits deduplicate; overlap and same-offset insertions conflict. A conflict leaves that document unchanged without blocking another safe document. A document with any original error-severity Mermaid/system Finding is not writable, even if a text rule proposes an edit, but retains its original result: `--fix` on an existing syntax error writes nothing to that document and exits `1` unless a higher-precedence collection result exists. Accepted edits apply descending by offset without normalizing LF/CRLF or Unicode. Any post-fix error-severity Mermaid/system Finding prevents that document's write and becomes `system/fix-validation-failed`. A second plan with the same complete selection must find no safe edit from any enabled/applicable rule, including a rule newly triggered by the first edit. One successful pass removes every definite heading marker and the next pass is unchanged.
+For fix safety, every edit is safe-integer, strictly non-empty, ordered, bounded, deterministic, and represented in host offsets. Identical edits deduplicate; zero-length insertions are protocol errors and overlapping replacements conflict. A conflict leaves that document unchanged without blocking another safe document. A document with any original error-severity Mermaid/system Finding is not writable, even if a text rule proposes an edit, but retains its original result: `--fix` on an existing syntax error writes nothing to that document and exits `1` unless a higher-precedence collection result exists. Accepted edits apply descending by offset without normalizing LF/CRLF or Unicode. Any post-fix error-severity Mermaid/system Finding prevents that document's write and becomes `system/fix-validation-failed`. A second plan with the same complete selection must find no safe edit from any enabled/applicable rule, including a rule newly triggered by the first edit. One successful pass removes every definite heading marker and the next pass is unchanged.
 
-For CLI behavior, `--fix-dry-run` never mutates any file and structured output contains the exact proposed text plus its nested `proposedResult`. Dry-run top-level Findings, validity, summary, and exit code continue to describe the original file; nested proposed spans describe `fix.output`. `--fix` and dry-run are mutually exclusive usage options. Apply mode preplans the complete collection before writing but exposes only one final `fix.status`; detailed planner status stays internal and stable Finding codes explain blockers. A plan blocker or write failure affects only its own document; other safe documents remain eligible. Each applied document reports the post-fix result, while blocked and write-failed documents report results matching their unchanged contents; JSON can never imply that proposed text reached disk. JSON-v2 remains one object and includes optional fixes and fix status without changing existing counts. Terminal lines retain original-file compiler coordinates in dry-run, mark fixable Findings, and announce application only after a successful write. Exit precedence remains `3 > 2 > 1 > 0`.
+For CLI behavior, `--fix-dry-run` never mutates any file and structured output contains the exact proposed text plus its nested `proposedResult`. Dry-run top-level Findings, validity, summary, and exit code continue to describe the original file; nested proposed spans describe `fix.output`. `--fix` and dry-run are mutually exclusive usage options. Apply mode preplans the complete collection before writing but exposes only one final `fix.status`; detailed planner status stays internal and stable Finding codes explain blockers. Each document is prepared in a same-directory temporary file and crosses to `applied` only after atomic rename. A plan blocker or replacement failure affects only its own document; other safe documents remain eligible. Each applied document reports the post-fix result, while blocked and write-failed documents report results matching their unchanged contents; JSON can never imply that proposed text reached disk. JSON-v2 remains one object and includes optional fixes and fix status without changing existing counts. Terminal lines retain original-file compiler coordinates in dry-run, mark fixable Findings, and announce application only after a successful replacement. Exit precedence remains `3 > 2 > 1 > 0`.
 
 For architecture, the resolved project graph is acyclic; Compatibility Evidence imports only its own subtree and `src/validation/index.ts`; CLI imports only `src/validation/index.ts`; root validation enters rules, Markdown, and Canonical Syntax through their `index.ts` seams; Rules never import CLI, compatibility, Markdown internals, Canonical Syntax internals, filesystem/process APIs, `@mermaid-lint/core`, Merman, or upstream AST types; only the rule option adapter imports Zod; only CLI owns config-root matching and file writes. The package remains one private package with no declarations/exports. LSP, MCP, Semantic Facts, rendering, geometry, image, layout, and model dependencies/directories remain absent.
 
@@ -492,7 +510,7 @@ produces a warning whose edit deletes `# ` and therefore proposes:
 
 The planning-time accepted external facts are Zod `4.4.3` as the current stable npm release and official Mermaid's double-quote-plus-backtick Markdown String syntax. They justify the exact dependency pin and scanner fixtures but are restated here so implementation does not depend on live documentation.
 
-Final implementation evidence must replace these placeholders with actual output:
+Final implementation evidence:
 
     $ rtk node dist/cli/main.js tests/fixtures/rules/heading-warning.mmd
     .../heading-warning.mmd:2:7: warning flowchart/no-markdown-heading-in-label: Markdown headings are not allowed in Flowchart node labels [fixable]
@@ -505,7 +523,22 @@ Final implementation evidence must replace these placeholders with actual output
     .../fixable-copy.mmd: applied 1 safe edit(s)
     # exit 0; post-fix result valid; second run unchanged
 
-Record the final exact dependency list, Node 22/24 test counts, compatibility summary, and any revised fixture/option names here at closeout.
+    $ rtk env PATH=".../node/v22.20.0/bin:.../Library/pnpm:..." pnpm check
+    Repository hygiene: clean across tracked and untracked files
+    Test Files  23 passed (23)
+    Tests       190 passed (190)
+
+    $ rtk env PATH=".../node/v24.18.0/bin:.../Library/pnpm:..." pnpm check
+    Repository hygiene: clean across tracked and untracked files
+    Test Files  23 passed (23)
+    Tests       190 passed (190)
+
+    $ pnpm compatibility  # repeated under Node 22.20.0 and 24.18.0
+    Compatibility summary: 27 fixtures, 108 observations
+    Test Files  4 passed (4)
+    Tests       16 passed (16)
+
+The final fixture names are `tests/fixtures/rules/heading-warning.mmd`, `fixable.mmd`, `error-config/mermaid-validator.config.json`, and `invalid-config/mermaid-validator.config.json`. The exact direct runtime dependencies are `commander@15.0.0`, `globby@16.2.2`, `jsdom@26.1.0`, `mdast-util-from-markdown@2.0.3`, `mermaid@11.16.0`, and `zod@4.4.3`.
 
 ## Interfaces and Dependencies
 
@@ -729,3 +762,11 @@ No public package interface is created. Keep `private: true`; do not add `export
 2026-07-25: Extended file-level isolation through filesystem writes. A bounded `input/write-failed` keeps that document's original result, later safe writes still run, and the obsolete fail-fast `not-attempted` application state and tests were removed.
 
 2026-07-25: Collapsed the previously separate public plan/application statuses into one final `fix.status`: `unchanged`, `previewed`, `applied`, `blocked`, or `write-failed`. Detailed `DocumentFixStatus` stays internal, while stable Findings explain why a document was blocked.
+
+2026-07-25: Implemented and closed Stage 3. The private package is now `0.2.0`; one exact runtime dependency (`zod@4.4.3`) supports strict rule options behind a single adapter. The implementation adds the private registry/configuration seam, prerequisite-gated async execution, the bounded Flowchart heading rule, strict host edit projection, canonical/conflict/idempotence fix planning, and file-isolated CLI preview/application. Documentation now describes config, JSON-v2 fix projection, recovery, and private registration status. Frozen Node 22.20.0 and Node 24.18.0 gates pass 23 files/174 tests, and compatibility remains 4 files/16 tests over 27 fixtures/108 observations. No Stage 4+ or deferred visual scope was added.
+
+2026-07-26: Narrowed the Stage 3 TextEdit contract after implementation review. Zero-length insertion edits are now rejected at rule-report validation and host normalization; Stage 3 supports only deletion and replacement until a concrete rule or adapter justifies explicit Markdown insertion-boundary semantics.
+
+2026-07-26: Replaced direct target writes with same-directory temporary-file preparation and atomic rename. This preserves original-result ownership on preparation/rename failure, retains the existing permission mode, cleans temporary state, and keeps later-file continuation; richer filesystem metadata, symlink-referent behavior, concurrent-edit detection, and crash-durable directory sync remain outside Stage 3.
+
+2026-07-26: Completed post-review verification on Node 22.20.0 and Node 24.18.0. Both full gates pass 23 test files/190 tests, and Compatibility Evidence remains 27 fixtures/108 observations. The final scanner matrix includes every supported legacy delimiter family plus modern edge-metadata exclusion, and atomic replacement tests cover both preparation and rename failure cleanup.

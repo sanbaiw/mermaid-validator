@@ -1,7 +1,17 @@
 import { describe, expect, it } from "vitest";
-import { runCli, type CliDependencies } from "../../../src/cli/main.js";
+import {
+  replaceFileAtomically,
+  runCli,
+  type AtomicReplaceDependencies,
+  type CliDependencies,
+} from "../../../src/cli/main.js";
 import { CliInputFailure } from "../../../src/cli/contracts.js";
-import type { DocumentSnapshot, Finding, ValidationResult } from "../../../src/validation/index.js";
+import type {
+  DocumentFixPlan,
+  DocumentSnapshot,
+  Finding,
+  ValidationResult,
+} from "../../../src/validation/index.js";
 
 function writer(onWrite: (text: string) => void): Pick<NodeJS.WriteStream, "write"> {
   return { write: ((text: string) => { onWrite(text); return true; }) as NodeJS.WriteStream["write"] };
@@ -23,10 +33,19 @@ async function invoke(options: {
   readonly findings?: readonly Finding[];
   readonly configFailure?: boolean;
   readonly discoveryFailure?: boolean;
-} = {}): Promise<{ code: number; stdout: string; stderr: string; documents: DocumentSnapshot[] }> {
+  readonly fixPlan?: (document: DocumentSnapshot) => DocumentFixPlan;
+  readonly writeFailure?: ReadonlySet<string>;
+} = {}): Promise<{
+  code: number;
+  stdout: string;
+  stderr: string;
+  documents: DocumentSnapshot[];
+  writes: { readonly path: string; readonly text: string }[];
+}> {
   let stdout = "";
   let stderr = "";
   const documents: DocumentSnapshot[] = [];
+  const writes: { readonly path: string; readonly text: string }[] = [];
   const files = options.files ?? ["/workspace/diagram.mmd"];
   const dependencies: Partial<CliDependencies> = {
     cwd: () => "/workspace",
@@ -46,6 +65,16 @@ async function invoke(options: {
       documents.push(document);
       return validation(document, options.findings);
     },
+    planFixes: async (document) => {
+      documents.push(document);
+      return options.fixPlan?.(document) ?? {
+        status: "unchanged", edits: [], originalResult: validation(document, options.findings),
+      };
+    },
+    replaceFile: async (path: string, text: string) => {
+      if (options.writeFailure?.has(path)) throw new Error("private write detail");
+      writes.push({ path, text });
+    },
     stdout: writer((text) => { stdout += text; }),
     stderr: writer((text) => { stderr += text; }),
   };
@@ -54,6 +83,7 @@ async function invoke(options: {
     stdout,
     stderr,
     documents,
+    writes,
   };
 }
 
@@ -141,8 +171,131 @@ describe("runCli", () => {
 
   it("handles version and invalid format before config or discovery", async () => {
     await expect(invoke({ argv: ["--version"], configFailure: true })).resolves.toMatchObject({
-      code: 0, stdout: "0.1.0\n", stderr: "", documents: [],
+      code: 0, stdout: "0.2.0\n", stderr: "", documents: [],
     });
     await expect(invoke({ argv: ["--format", "yaml"] })).resolves.toMatchObject({ code: 2, stdout: "" });
+  });
+
+  it("previews changed output without writing and keeps the original result at top level", async () => {
+    const invocation = await invoke({
+      argv: ["--fix-dry-run", "--format", "json", "diagram.mmd"],
+      findings: [{ code: "example/fix", severity: "warning", message: "fix", source: "rule",
+        locationPrecision: "exact", span: { startOffset: 0, endOffset: 1 },
+        fixes: [{ span: { startOffset: 0, endOffset: 1 }, newText: "F" }] }],
+      fixPlan: (document) => ({
+        status: "changed", edits: [{ span: { startOffset: 0, endOffset: 1 }, newText: "F" }],
+        originalResult: validation(document, [{ code: "example/fix", severity: "warning", message: "fix",
+          source: "rule", locationPrecision: "exact", span: { startOffset: 0, endOffset: 1 },
+          fixes: [{ span: { startOffset: 0, endOffset: 1 }, newText: "F" }] }]),
+        output: "Flowchart TD",
+        proposedResult: validation({ ...document, text: "Flowchart TD" }),
+      }),
+    });
+    expect(invocation.writes).toEqual([]);
+    expect(JSON.parse(invocation.stdout)).toMatchObject({
+      summary: { warnings: 1 },
+      documents: [{ findings: [{ code: "example/fix" }], fix: {
+        status: "previewed", editCount: 1, output: "Flowchart TD",
+        proposedResult: { valid: true, findings: [] },
+      } }],
+    });
+  });
+
+  it("keeps the original result after preparation fails and continues later safe plans", async () => {
+    const files = ["/workspace/c.mmd", "/workspace/a.mmd", "/workspace/b.mmd"];
+    const invocation = await invoke({
+      argv: ["--fix", "--format", "json", "."], files,
+      writeFailure: new Set(["/workspace/b.mmd"]),
+      fixPlan: (document) => ({
+        status: "changed", edits: [{ span: { startOffset: 0, endOffset: 1 }, newText: "F" }],
+        originalResult: validation(document, [{ code: "example/fix", severity: "error", message: "fix",
+          source: "rule", locationPrecision: "exact", fixes: [{ span: { startOffset: 0, endOffset: 1 }, newText: "F" }] }]),
+        output: "Flowchart TD",
+        proposedResult: validation({ ...document, text: "Flowchart TD" }),
+      }),
+    });
+    expect(invocation.code).toBe(2);
+    expect(invocation.writes.map(({ path }) => path)).toEqual(["/workspace/a.mmd", "/workspace/c.mmd"]);
+    expect(invocation.stderr).toBe("/workspace/b.mmd: Unable to write input file\n");
+    expect(JSON.parse(invocation.stdout)).toMatchObject({
+      complete: false,
+      inputErrors: [{ code: "input/write-failed", path: "/workspace/b.mmd" }],
+      documents: [
+        { uri: "file:///workspace/a.mmd", valid: true, fix: { status: "applied" } },
+        { uri: "file:///workspace/b.mmd", valid: false, fix: { status: "write-failed" } },
+        { uri: "file:///workspace/c.mmd", valid: true, fix: { status: "applied" } },
+      ],
+    });
+  });
+
+  it("rejects mutually exclusive fix modes before loading config", async () => {
+    await expect(invoke({ argv: ["--fix", "--fix-dry-run", "diagram.mmd"], configFailure: true }))
+      .resolves.toMatchObject({ code: 2, documents: [] });
+  });
+});
+
+describe("replaceFileAtomically", () => {
+  it("cleans a partially prepared temporary file without renaming the target", async () => {
+    const events: string[] = [];
+    const handle = {
+      writeFile: async () => {
+        events.push("write");
+        throw new Error("storage full");
+      },
+      chmod: async () => { events.push("chmod"); },
+      sync: async () => { events.push("sync"); },
+      close: async () => { events.push("close"); },
+    };
+    const dependencies: Partial<AtomicReplaceDependencies> = {
+      stat: (async () => ({ mode: 0o100744 })) as unknown as AtomicReplaceDependencies["stat"],
+      createTemporaryPath: () => "/workspace/.diagram.mmd.tmp",
+      open: (async (path: string, flags: string, mode: number) => {
+        events.push(`open:${path}:${flags}:${mode.toString(8)}`);
+        return handle;
+      }) as unknown as AtomicReplaceDependencies["open"],
+      rename: async () => { events.push("rename"); },
+      unlink: async (path) => { events.push(`unlink:${path}`); },
+    };
+
+    await expect(replaceFileAtomically("/workspace/diagram.mmd", "fixed", dependencies))
+      .rejects.toThrow("storage full");
+    expect(events).toEqual([
+      "open:/workspace/.diagram.mmd.tmp:wx:744",
+      "write",
+      "close",
+      "unlink:/workspace/.diagram.mmd.tmp",
+    ]);
+  });
+
+  it("cleans the owned temporary file and propagates an atomic rename failure", async () => {
+    const events: string[] = [];
+    const renameFailure = new Error("rename unavailable");
+    const handle = {
+      writeFile: async () => { events.push("write"); },
+      chmod: async () => { events.push("chmod"); },
+      sync: async () => { events.push("sync"); },
+      close: async () => { events.push("close"); },
+    };
+    const dependencies: Partial<AtomicReplaceDependencies> = {
+      stat: (async () => ({ mode: 0o100640 })) as unknown as AtomicReplaceDependencies["stat"],
+      createTemporaryPath: () => "/workspace/.diagram.mmd.tmp",
+      open: (async () => handle) as unknown as AtomicReplaceDependencies["open"],
+      rename: async () => {
+        events.push("rename");
+        throw renameFailure;
+      },
+      unlink: async (path) => { events.push(`unlink:${path}`); },
+    };
+
+    await expect(replaceFileAtomically("/workspace/diagram.mmd", "fixed", dependencies))
+      .rejects.toBe(renameFailure);
+    expect(events).toEqual([
+      "write",
+      "chmod",
+      "sync",
+      "close",
+      "rename",
+      "unlink:/workspace/.diagram.mmd.tmp",
+    ]);
   });
 });

@@ -7,5 +7,7 @@ export interface DocumentSnapshot {
 
 export interface ValidateOptions {
   readonly mode?: "canonical";
+  readonly rules?: ResolvedRuleConfiguration;
   readonly signal?: AbortSignal;
 }
+import type { ResolvedRuleConfiguration } from "./rules/index.js";

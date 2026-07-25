@@ -20,12 +20,15 @@ describe("evaluated engine versions", () => {
     expect(manifest.dependencies).toMatchObject({
       globby: "16.2.2",
       "mdast-util-from-markdown": "2.0.3",
+      zod: "4.4.3",
     });
     expect(manifest.devDependencies).toMatchObject({
       "@mermaid-lint/core": "0.35.0",
       "@mermanjs/web": "0.7.0",
     });
     expect(direct).not.toHaveProperty("lilconfig");
-    expect(direct).not.toHaveProperty("zod");
+    expect(direct).not.toHaveProperty("ajv");
+    expect(direct).not.toHaveProperty("minimatch");
+    expect(direct).not.toHaveProperty("picomatch");
   });
 });

@@ -1,8 +1,8 @@
 # Mermaid Diagram Validator
 
-A private TypeScript/Node validator that uses exact-pinned official Mermaid as the canonical syntax authority. Stage 2 validates standalone Mermaid files and exact-lowercase `mermaid` fenced blocks in Markdown, with repository discovery and host-document source ranges.
+A private TypeScript/Node validator that uses exact-pinned official Mermaid as the canonical syntax authority. Stage 3 validates standalone Mermaid files and exact-lowercase `mermaid` fenced blocks in Markdown, adds configurable rules, and plans or applies bounded safe fixes.
 
-Rendering, geometry checks, layout comparison, model-based visual review, rules, fixes, LSP, Semantic Facts, and MCP remain deferred.
+Rendering, geometry checks, layout comparison, model-based visual review, LSP, Semantic Facts, public plugin loading, and MCP remain deferred.
 
 ## Requirements and build
 
@@ -19,7 +19,7 @@ pnpm build
 The package is private and has no supported package-level programmatic import. Run the built entry directly:
 
 ```sh
-node dist/cli/main.js [--format terminal|json] [--config path] [paths...]
+node dist/cli/main.js [--format terminal|json] [--config path] [--fix|--fix-dry-run] [paths...]
 ```
 
 Supported file extensions are `.mmd`, `.mermaid`, and `.md`, case-insensitively. `.markdown`, `.mdx`, and URLs are not supported.
@@ -37,11 +37,20 @@ Directory and default discovery recurse through supported files, include dot dir
 
 Markdown extraction recognizes CommonMark backtick and tilde fences whose parsed language is exactly lowercase `mermaid`. Differently cased labels such as `Mermaid` are ignored. Lists, blockquotes, CRLF, Unicode, multiple blocks, and EOF-closed fences retain ranges in the original host document. Stage 2 does not special-case frontmatter: a fence CommonMark recognizes inside metadata may be extracted.
 
-The optional nearest-upward `mermaid-validator.config.json` contains only root-relative exclusions:
+The optional nearest-upward `mermaid-validator.config.json` contains root-relative exclusions, base rule settings, and ordered per-file overrides:
 
 ```json
 {
-  "ignore": ["drafts/**", "docs/generated-?.md"]
+  "ignore": ["drafts/**", "docs/generated-?.md"],
+  "rules": {
+    "flowchart/no-markdown-heading-in-label": "warning"
+  },
+  "overrides": [
+    {
+      "files": ["docs/strict/**"],
+      "rules": { "flowchart/no-markdown-heading-in-label": "error" }
+    }
+  ]
 }
 ```
 
@@ -49,7 +58,7 @@ Use `--config path` to load exactly one file. See the [configuration reference](
 
 ## Output and exit codes
 
-Valid input produces no terminal output. Findings use compiler-style host paths and coordinates:
+Valid input with no rule findings produces no terminal output. Findings use compiler-style host paths and coordinates; a fixable Finding ends with `[fixable]`:
 
 ```text
 /absolute/path/guide.md:12:7: error mermaid/syntax-error: Mermaid syntax error: <bounded detail>
@@ -57,19 +66,21 @@ Valid input produces no terminal output. Findings use compiler-style host paths 
 
 `--format json` always emits one deterministic JSON-v2 collection, even for one file. It includes per-document diagram counts, collection completeness, bounded read errors, and summary counts. See the [JSON-v2 reference](./docs/reference/json-output-v2.md).
 
+`--fix-dry-run` computes and revalidates the same in-memory plan as `--fix` but never writes. JSON preview output keeps top-level results tied to unchanged disk content and nests `output` plus `proposedResult` under the document's `fix` object. `--fix` writes each safe document independently, reports post-fix results after successful writes, and continues later files after a bounded write failure. See [rules and fixes](./docs/reference/rules-and-fixes.md).
+
 After discovery, unreadable files are reported on stderr while readable files are still validated. JSON marks that collection `complete: false`; terminal and JSON use the same exit precedence.
 
 | Code | Meaning |
 |---:|---|
 | `0` | The complete collection has no error finding. |
-| `1` | Validation completed, but Mermaid syntax is invalid or a diagram family is unsupported. |
-| `2` | Configuration, discovery, usage, or file reads made the collection incomplete. |
-| `3` | A canonical parser or Markdown extraction system failure made validation indeterminate. |
+| `1` | Validation completed, but Mermaid syntax, an unsupported family, or an error-severity rule made the reported contents invalid. |
+| `2` | Configuration, discovery, usage, or file reads/writes made the collection incomplete. |
+| `3` | A canonical parser, Markdown extraction, rule runtime/protocol, or fix-safety system failure made validation indeterminate. |
 
-For mixed results, precedence is `3 > 2 > 1 > 0`. `--version` prints `0.1.0` without starting discovery or the parser worker.
+For mixed results, precedence is `3 > 2 > 1 > 0`. `--version` prints `0.2.0` without starting discovery or the parser worker.
 
 ## Development evidence and scope
 
 `pnpm check` runs strict typechecking, the build, repository hygiene, and all tests. `pnpm compatibility` reruns the independent Stage 0 evidence across 27 fixtures and 108 observations. The selected canonical profile and reuse boundary are recorded in [ADR 0001](./docs/adr/0001-validation-foundation.md).
 
-The package remains private and pre-release. JSON-v1 is historical only; Stage 2 emits v2 without a compatibility selector. See [DRAFT-PLAN.md](./DRAFT-PLAN.md) for later stages and [ARCHITECTURE.md](./ARCHITECTURE.md) for module boundaries.
+The package remains private and pre-release. JSON-v1 is historical only; Stage 3 extends v2 in place without a compatibility selector. The rule registration seam is repository-private through Stage 5. See [DRAFT-PLAN.md](./DRAFT-PLAN.md) for later stages and [ARCHITECTURE.md](./ARCHITECTURE.md) for module boundaries.

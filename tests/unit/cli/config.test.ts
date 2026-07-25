@@ -2,7 +2,7 @@ import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import { loadCliConfig } from "../../../src/cli/config.js";
+import { loadCliConfig, rulesForPath } from "../../../src/cli/config.js";
 
 const roots: string[] = [];
 async function root(): Promise<string> {
@@ -62,5 +62,42 @@ describe("CLI config", () => {
     await writeFile(join(directory, "bad.json"), "{");
     await expect(loadCliConfig({ cwd: directory, explicitPath: "bad.json" })).rejects.toThrow(/Invalid JSON/);
     await expect(loadCliConfig({ cwd: directory, explicitPath: "missing.json" })).rejects.toThrow(/does not exist/);
+  });
+
+  it("layers sparse base rules and every matching override in declaration order", async () => {
+    const directory = await root();
+    await writeFile(join(directory, "config.json"), JSON.stringify({
+      rules: { "flowchart/no-markdown-heading-in-label": "warning" },
+      overrides: [
+        { files: ["docs/**"], rules: { "flowchart/no-markdown-heading-in-label": "error" } },
+        { files: ["docs/drafts/?*.md"], rules: { "flowchart/no-markdown-heading-in-label": "off" } },
+      ],
+    }));
+    const loaded = await loadCliConfig({ cwd: directory, explicitPath: "config.json" });
+    expect(rulesForPath(loaded, join(directory, "docs", "guide.md")))
+      .toMatchObject({ "flowchart/no-markdown-heading-in-label": { severity: "error" } });
+    expect(rulesForPath(loaded, join(directory, "docs\\guide.md")))
+      .toMatchObject({ "flowchart/no-markdown-heading-in-label": { severity: "error" } });
+    expect(rulesForPath(loaded, join(directory, "docs", "drafts", "a.md")))
+      .toMatchObject({ "flowchart/no-markdown-heading-in-label": { severity: "off" } });
+    expect(rulesForPath(loaded, join(directory, "other.md")))
+      .toMatchObject({ "flowchart/no-markdown-heading-in-label": { severity: "warning" } });
+    expect(rulesForPath(loaded, join(directory, "..", "outside.md")))
+      .toMatchObject({ "flowchart/no-markdown-heading-in-label": { severity: "warning" } });
+  });
+
+  it.each([
+    [{ rules: { "unknown/rule": "warning" } }, /Unknown rule/],
+    [{ rules: { "flowchart/no-markdown-heading-in-label": "warn" } }, /Invalid setting/],
+    [{ rules: { "flowchart/no-markdown-heading-in-label": ["warning"] } }, /Invalid setting/],
+    [{ rules: { "flowchart/no-markdown-heading-in-label": ["warning", { extra: true }] } }, /Invalid options/],
+    [{ overrides: [{ files: [], rules: { "flowchart/no-markdown-heading-in-label": "error" } }] }, /Invalid override/],
+    [{ overrides: [{ files: ["../outside/**"], rules: { "flowchart/no-markdown-heading-in-label": "error" } }] }, /Invalid override/],
+    [{ overrides: [{ files: ["docs/**"], rules: {} }] }, /Invalid override/],
+    [{ overrides: [{ files: ["docs/**"], rules: { "flowchart/no-markdown-heading-in-label": "error" }, extra: true }] }, /Invalid override/],
+  ])("rejects invalid Stage 3 config %j", async (value, message) => {
+    const directory = await root();
+    await writeFile(join(directory, "config.json"), JSON.stringify(value));
+    await expect(loadCliConfig({ cwd: directory, explicitPath: "config.json" })).rejects.toThrow(message);
   });
 });

@@ -1,8 +1,8 @@
 {
   "name": "mermaid-diagram-validator",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
-  "description": "Canonical Mermaid syntax validator with terminal and JSON output",
+  "description": "Canonical Mermaid validator with configurable rules and safe fixes",
   "type": "module",
   "engines": {
     "node": "^22.13.0 || >=24.0.0"
@@ -25,7 +25,8 @@
     "globby": "16.2.2",
     "jsdom": "26.1.0",
     "mdast-util-from-markdown": "2.0.3",
-    "mermaid": "11.16.0"
+    "mermaid": "11.16.0",
+    "zod": "4.4.3"
   },
   "devDependencies": {
     "@mermaid-lint/core": "0.35.0",

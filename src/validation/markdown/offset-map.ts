@@ -67,3 +67,27 @@ export function projectEmbeddedSpan(
   if (hostStart === undefined || hostEnd === undefined || hostEnd < hostStart) return undefined;
   return { startOffset: hostStart, endOffset: hostEnd };
 }
+
+export function projectEmbeddedEditSpan(
+  diagram: ExtractedDiagram,
+  embeddedSpan: EmbeddedSpan,
+): HostSpan | undefined {
+  const { startOffset, endOffset } = embeddedSpan;
+  if (!Number.isSafeInteger(startOffset) || !Number.isSafeInteger(endOffset)
+    || startOffset < 0 || endOffset < startOffset || endOffset > diagram.source.length) return undefined;
+  for (const segment of diagram.segments) {
+    const containsStart = startOffset >= segment.embeddedStartOffset
+      && startOffset <= segment.embeddedEndOffset;
+    const containsEnd = endOffset >= segment.embeddedStartOffset
+      && endOffset <= segment.embeddedEndOffset;
+    if (!containsStart || !containsEnd) continue;
+    const span = {
+      startOffset: segment.hostStartOffset + startOffset - segment.embeddedStartOffset,
+      endOffset: segment.hostStartOffset + endOffset - segment.embeddedStartOffset,
+    };
+    return span.startOffset >= segment.hostStartOffset && span.endOffset <= segment.hostEndOffset
+      ? span
+      : undefined;
+  }
+  return undefined;
+}

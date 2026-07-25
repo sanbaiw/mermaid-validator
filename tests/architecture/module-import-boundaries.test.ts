@@ -26,6 +26,13 @@ function assertModuleEdges(edges: readonly Edge[]): void {
       expect(edge.target?.startsWith("src/cli/") ?? false, JSON.stringify(edge)).toBe(false);
       expect(edge.target?.startsWith("src/compatibility/") ?? false, JSON.stringify(edge)).toBe(false);
     }
+    if (edge.source.startsWith("src/compatibility/") && edge.target !== undefined) {
+      expect(
+        edge.target.startsWith("src/compatibility/")
+        || edge.target === "src/validation/index.ts",
+        JSON.stringify(edge),
+      ).toBe(true);
+    }
     if (/^src\/validation\/[^/]+\.ts$/.test(edge.source)
       && edge.target?.startsWith("src/validation/canonical-syntax/")) {
       expect(edge.target, JSON.stringify(edge)).toBe("src/validation/canonical-syntax/index.ts");
@@ -34,11 +41,18 @@ function assertModuleEdges(edges: readonly Edge[]): void {
       && edge.target?.startsWith("src/validation/markdown/")) {
       expect(edge.target, JSON.stringify(edge)).toBe("src/validation/markdown/index.ts");
     }
+    if (/^src\/validation\/[^/]+\.ts$/.test(edge.source)
+      && edge.target?.startsWith("src/validation/rules/")) {
+      expect(edge.target, JSON.stringify(edge)).toBe("src/validation/rules/index.ts");
+    }
     if (edge.source.startsWith("src/validation/canonical-syntax/") && edge.target !== undefined) {
       expect(edge.target.startsWith("src/validation/canonical-syntax/"), JSON.stringify(edge)).toBe(true);
     }
     if (edge.source.startsWith("src/validation/markdown/") && edge.target !== undefined) {
       expect(edge.target.startsWith("src/validation/markdown/"), JSON.stringify(edge)).toBe(true);
+    }
+    if (edge.source.startsWith("src/validation/rules/") && edge.target !== undefined) {
+      expect(edge.target.startsWith("src/validation/rules/"), JSON.stringify(edge)).toBe(true);
     }
     if ((edge.specifier === "mermaid" || edge.specifier === "jsdom")
       && !edge.source.startsWith("src/compatibility/")) {
@@ -49,11 +63,44 @@ function assertModuleEdges(edges: readonly Edge[]): void {
     }
     if (edge.specifier === "globby") expect(edge.source).toBe("src/cli/discovery.ts");
     if (edge.specifier === "commander") expect(edge.source.startsWith("src/cli/")).toBe(true);
+    if (edge.specifier === "zod") {
+      expect(edge.source).toBe("src/validation/rules/options-schema.ts");
+    }
+    if (edge.specifier === "@mermaid-lint/core" || edge.specifier === "@mermanjs/web") {
+      expect(edge.source.startsWith("src/compatibility/engines/")).toBe(true);
+    }
+    if (edge.source.startsWith("src/validation/rules/")
+      && (/^node:(fs|fs\/promises|path|process)$/.test(edge.specifier)
+        || edge.specifier === "@mermaid-lint/core"
+        || edge.specifier === "@mermanjs/web")) {
+      expect.unreachable(`Rules imported a forbidden external capability: ${JSON.stringify(edge)}`);
+    }
     if (/^node:(fs|fs\/promises|path)$/.test(edge.specifier)
       && /^src\/validation\/[^/]+\.ts$/.test(edge.source)) {
       expect.unreachable(`root Diagram Validation imported filesystem code: ${JSON.stringify(edge)}`);
     }
   }
+}
+
+function assertAcyclic(edges: readonly Edge[]): void {
+  const adjacency = new Map<string, string[]>();
+  for (const { source, target } of edges) {
+    if (target === undefined) continue;
+    const targets = adjacency.get(source) ?? [];
+    targets.push(target);
+    adjacency.set(source, targets);
+  }
+  const visiting = new Set<string>();
+  const visited = new Set<string>();
+  const visit = (source: string, path: readonly string[]): void => {
+    if (visiting.has(source)) throw new Error(`Project import cycle: ${[...path, source].join(" -> ")}`);
+    if (visited.has(source)) return;
+    visiting.add(source);
+    for (const target of adjacency.get(source) ?? []) visit(target, [...path, source]);
+    visiting.delete(source);
+    visited.add(source);
+  };
+  for (const source of adjacency.keys()) visit(source, []);
 }
 
 describe("module import boundaries", () => {
@@ -99,6 +146,7 @@ describe("module import boundaries", () => {
         visit(sourceFile);
       }
       assertModuleEdges(edges);
+      assertAcyclic(edges);
     } finally {
       snapshot.dispose();
       api.close();
@@ -112,7 +160,26 @@ describe("module import boundaries", () => {
     [{ source: "src/validation/markdown/offset-map.ts", specifier: "../../cli/main.js", target: "src/cli/main.ts" }],
     [{ source: "src/validation/validate-document.ts", specifier: "node:fs/promises" }],
     [{ source: "src/cli/main.ts", specifier: "globby" }],
-  ])("rejects forbidden Stage 2 edge %j", (edge) => {
+    [{ source: "src/compatibility/report.ts", specifier: "../cli/main.js", target: "src/cli/main.ts" }],
+    [{ source: "src/compatibility/report.ts", specifier: "../validation/document.js", target: "src/validation/document.ts" }],
+    [{ source: "src/cli/main.ts", specifier: "../validation/rules/index.js", target: "src/validation/rules/index.ts" }],
+    [{ source: "src/validation/fix-document.ts", specifier: "./rules/fixes.js", target: "src/validation/rules/fixes.ts" }],
+    [{ source: "src/validation/rules/run-rules.ts", specifier: "../../cli/main.js", target: "src/cli/main.ts" }],
+    [{ source: "src/validation/rules/run-rules.ts", specifier: "../../compatibility/contracts.js", target: "src/compatibility/contracts.ts" }],
+    [{ source: "src/validation/rules/run-rules.ts", specifier: "../canonical-syntax/protocol.js", target: "src/validation/canonical-syntax/protocol.ts" }],
+    [{ source: "src/validation/rules/run-rules.ts", specifier: "../markdown/contracts.js", target: "src/validation/markdown/contracts.ts" }],
+    [{ source: "src/validation/rules/run-rules.ts", specifier: "node:fs/promises" }],
+    [{ source: "src/validation/rules/run-rules.ts", specifier: "@mermaid-lint/core" }],
+    [{ source: "src/validation/rules/run-rules.ts", specifier: "@mermanjs/web" }],
+    [{ source: "src/validation/rules/registry.ts", specifier: "zod" }],
+  ])("rejects forbidden Stage 3 edge %j", (edge) => {
     expect(() => assertModuleEdges([edge])).toThrow();
+  });
+
+  it("rejects a resolved project import cycle", () => {
+    expect(() => assertAcyclic([
+      { source: "src/a.ts", specifier: "./b.js", target: "src/b.ts" },
+      { source: "src/b.ts", specifier: "./a.js", target: "src/a.ts" },
+    ])).toThrow(/Project import cycle/);
   });
 });

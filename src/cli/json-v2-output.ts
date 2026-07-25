@@ -12,6 +12,7 @@ function projectFinding(finding: Finding): Record<string, unknown> {
     ...(finding.diagramType === undefined ? {} : { diagramType: finding.diagramType }),
     ...(finding.engine === undefined ? {} : { engine: finding.engine }),
     ...(finding.help === undefined ? {} : { help: finding.help }),
+    ...(finding.fixes === undefined ? {} : { fixes: finding.fixes }),
   };
 }
 
@@ -47,13 +48,31 @@ export function formatJsonV2(
     inputErrors: [...inputErrors]
       .sort((left, right) => left.path.localeCompare(right.path))
       .map((error) => ({ code: error.code, path: error.path, message: error.message })),
-    documents: documents.map(({ document, result }) => ({
+    documents: documents.map(({ document, result, fix }) => ({
       uri: result.documentUri,
       languageId: document.languageId,
       diagramCount: result.diagramCount,
       ...(result.documentVersion === undefined ? {} : { version: result.documentVersion }),
       valid: result.valid,
       findings: result.findings.map(projectFinding),
+      ...(fix === undefined ? {} : {
+        fix: {
+          status: fix.status,
+          editCount: fix.plan.edits.length,
+          edits: fix.plan.edits,
+          ...(fix.status === "previewed" ? {
+            output: fix.plan.output,
+            proposedResult: fix.plan.proposedResult === undefined ? undefined : {
+              uri: fix.plan.proposedResult.documentUri,
+              diagramCount: fix.plan.proposedResult.diagramCount,
+              ...(fix.plan.proposedResult.documentVersion === undefined
+                ? {} : { version: fix.plan.proposedResult.documentVersion }),
+              valid: fix.plan.proposedResult.valid,
+              findings: fix.plan.proposedResult.findings.map(projectFinding),
+            },
+          } : {}),
+        },
+      }),
     })),
     summary,
   }, null, 2)}\n`;
