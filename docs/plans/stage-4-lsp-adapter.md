@@ -8,7 +8,7 @@ Maintain this document in accordance with `PLANS.md` at the repository root. `DR
 
 After Stage 4, an editor or coding agent that speaks the Language Server Protocol (LSP) can start `node dist/lsp/main.js --stdio`, open an unsaved Mermaid or Markdown buffer, and receive versioned diagnostics produced by the same in-memory Diagram Validation operation as the CLI. Changes are debounced, older validation is cancelled, late results are discarded, and closing a document clears its diagnostics. Findings continue to use official Mermaid for canonical syntax and the Stage 3 rule selection for lint behavior.
 
-When the client supports literal Code Actions and versioned document changes, a fixable diagnostic offers one Quick Fix titled `Apply all safe Mermaid fixes in this document`. The server obtains that action from `planDocumentFixes()` against the current buffer; it does not expose raw candidate edits directly. The returned workspace edit carries the current document version, so an edit planned for an older buffer cannot silently apply to newer text. The server never writes an open document or asks the CLI to do so.
+When the client supports literal Code Actions, explicitly lists `quickfix` in its supported Code Action kind value set, and supports versioned document changes, a fixable diagnostic offers one Quick Fix titled `Apply all safe Mermaid fixes in this document`. The server obtains that action from `planDocumentFixes()` against the current buffer; it does not expose raw candidate edits directly. The returned workspace edit carries the current document version, so an edit planned for an older buffer cannot silently apply to newer text. The server never writes an open document or asks the CLI to do so.
 
 Stage 4 also establishes the right performance model for editor use. The language server remains alive across changes and therefore reuses the serialized canonical worker after a successful request. A repository-owned LSP process harness records first-diagnostic and subsequent-change latency separately, including median and range, without turning a workstation snapshot into a CI timing threshold. Debounce, cancellation, version rejection, and one long-lived process are acceptance requirements; speculative caches, a daemon, multiple Mermaid workers, or a Markdown parser rewrite are not.
 
@@ -22,12 +22,17 @@ This stage creates only the LSP delivery adapter and its tests and documentation
 - [x] (2026-07-26 16:11Z) Drafted the complete Stage 4 boundary, scheduling state machine, diagnostic projection, initialization options, safe Code Action policy, process-level tests, performance characterization, dependencies, and acceptance behavior in this ExecPlan.
 - [x] (2026-07-26 16:27Z) Completed an independent design-intent and contract review. Tightened immutable snapshot/cache ownership, publication races, CLI/LSP parity, invalid-params construction, capability negotiation, shutdown semantics, process-test determinism, and the performance clock before implementation.
 - [x] (2026-07-26 18:52Z) Completed a 29-branch, one-question-at-a-time design grilling with the user. Confirmed every existing load-bearing branch and closed previously unstated URI-scheme, Code Action diagnostic-scope, minimal Diagnostic projection, process-harness, non-monotonic-version, and exact initialize-capability decisions. The Stage 4 scope is locked and ready for implementation.
-- [ ] Implement Milestone 1: exact LSP dependencies, architecture enforcement, and the Stage 4 architecture snapshot.
-- [ ] Implement Milestone 2: initialization-option parsing, UTF-16 diagnostic projection, and the version-aware validation scheduler.
-- [ ] Implement Milestone 3: the stdio server lifecycle and unsaved-buffer push diagnostics.
-- [ ] Implement Milestone 4: current-version, planner-backed Quick Fix Code Actions.
-- [ ] Implement Milestone 5: process integration coverage and cold-versus-warm performance characterization.
-- [ ] Implement Milestone 6: documentation, version `0.3.0`, dual-Node verification, and Stage 4 closeout without entering Stage 5.
+- [x] (2026-07-26 18:59Z) Established the implementation baseline at commit `f1a9e30` on Node 22.20.0/pnpm 10.30.1. `pnpm check` passed and `pnpm compatibility` remained 4 files/16 tests over 27 fixtures/108 observations; the unrelated README and performance note remain untouched.
+- [x] (2026-07-26 18:59Z) Implemented Milestone 1: exact runtime pins `vscode-languageserver@10.1.0` and `vscode-languageserver-textdocument@1.0.12`, transitive protocol `3.18.2`, Stage 4 LSP import/ownership tests, and the active LSP architecture snapshot. The focused architecture suite passes 4 files/32 tests.
+- [x] (2026-07-26 19:03Z) Implemented Milestone 2: strict private initialization/transport parsing, defensive UTF-16 Diagnostic/edit projection, and an immutable notification-time, per-URI version/generation scheduler with deterministic cancellation/publication-race tests.
+- [x] (2026-07-26 19:06Z) Implemented Milestone 3: the guarded stdio entry, exact initialize surface, official incremental text store, supported/unsupported language handling, opaque URI ownership, versioned push diagnostics, close cleanup, and official shutdown/exit behavior.
+- [x] (2026-07-26 19:07Z) Implemented Milestone 4: capability-gated, contextual `quickfix` handling that replans the complete current buffer, rejects every stale/refused/cancelled plan, and returns one versioned planner-approved `TextDocumentEdit` without applying it.
+- [x] (2026-07-26 19:10Z) Implemented Milestone 5: repository-owned split-frame stdio client, built-process lifecycle/buffer/range/Quick Fix tests, CLI/LSP parity under default and error rules, deterministic worker-reuse evidence, and opt-in cold/warm characterization.
+- [x] (2026-07-26 19:25Z) Implemented Milestone 6: language-server documentation, isolated README additions preserving the earlier performance link, private version `0.3.0`, finalized architecture/roadmap evidence, and frozen Node 22.20.0/24.18.0 gates. Stage 5 remains absent.
+- [x] (2026-07-26 19:37Z) Completed the required independent read-only implementation review and resolved every finding: ignored planner cancellation, rejected diagnostic publications, field-level null options, unbounded invalid-params messages, and a stale revision sentence. Regression tests raise the final dual-runtime gate to 29 files/242 tests plus 4 compatibility files/16 tests over 27 fixtures/108 observations.
+- [x] (2026-07-27 17:40Z) Re-reviewed the integrated worktree against this plan and interviewed the user on every high-priority branch. The current Node 22.20.0 `pnpm check` passes 242 tests with one opt-in skip and both runtimes pass the 27-fixture/108-observation compatibility gate, but a fresh Node 24.18.0 full gate produced three canonical parser timeouts under file-level test concurrency. The three affected files pass 51/51 when rerun alone but take 96.82 seconds, so the earlier Stage 4 closeout is reopened.
+- [ ] Implement Milestone 7 correctness hardening: negotiate actual `quickfix` kind support, complete the planner and process-level acceptance matrices, close the bare Node builtin architecture-check loophole, and repair every Stage 4 status/version/evidence surface without changing canonical parser timeouts or test concurrency.
+- [ ] After Milestone 7 is green, stop with Stage 4 marked “implementation complete; closeout blocked.” Author and review a standalone performance ExecPlan for Node 24 test-process contention; do not perform that performance work in this plan. Stage 4 may close only after the separate plan proves three consecutive Node 24 full gates and one Node 22 full gate without increasing the 10-second product parser deadline or removing real process tests.
 
 ## Surprises & Discoveries
 
@@ -54,6 +59,27 @@ This stage creates only the LSP delivery adapter and its tests and documentation
 
 - Observation: The pre-existing `README.md` change is an isolated two-line Stage 2 performance-reference addition at the end of the development-evidence section, so Stage 4 documentation can be added without overwriting or rewriting that user change.
   Evidence: `git diff -- README.md` shows only the dated performance-snapshot link and its blank separator as added lines. Stage 4 must preserve them exactly while updating the introduction, private built command, and reference links.
+
+- Observation: Running the focused TypeScript check through RTK's normal filtered path can emit JavaScript and source maps beside TypeScript sources even though the configured test project is no-emit.
+  Evidence: The first Milestone 1 `rtk pnpm typecheck` created only untracked `.js`/`.js.map` artifacts under `src/`, `tests/`, `fixtures/`, and `vitest.config`; they were removed immediately. Subsequent TypeScript gates use `rtk proxy pnpm typecheck`, matching the review-hardened Stage 3 recovery path.
+
+- Observation: Expanding the built-process suite increases child-process startup contention enough that the existing test-only 500 ms worker-start deadline can flake under the full Node 24 matrix even though the same worker-host file passes alone in 2.2 seconds.
+  Evidence: The first Node 24 full gate failed only the delayed-ready cancellation fixture; an immediate isolated rerun passed all 11 worker-host tests. Raising only the injected test-fixture startup budget to 2,000 ms allowed the implementation-time 29-file gate to pass without changing the product's 10-second canonical worker deadline, but the later re-review below proves that this was not a durable full-suite fix.
+
+- Observation: AbortSignal propagation and a bounded logger are insufficient when an injected dependency ignores cancellation or the protocol transport itself rejects.
+  Evidence: Independent read-only review reproduced a cancelled Code Action returning an edit from an ignored signal and an always-rejecting diagnostic publisher producing `unhandledRejection`. The final adapter rechecks the controller after planning and contains both normal/clearing/close publication rejections; focused regression tests cover each branch.
+
+- Observation: The current Quick Fix capability check treats the mere presence of `codeActionLiteralSupport` as support for `quickfix`, even when the client's declared `codeActionKind.valueSet` contains only another kind such as `refactor`.
+  Evidence: `src/lsp/server.ts` checks only that literal support exists and `workspaceEdit.documentChanges` is true. The protocol capability's value set is the client's explicit list of supported literal kinds, so advertising and returning `quickfix` outside that set violates the intended capability gate.
+
+- Observation: The current internal Code Action tests do not implement the safety matrix already required by Milestone 4, and the process suite does not prove several Milestone 5 lifecycle and projection claims.
+  Evidence: `tests/internal/lsp/server.test.ts` injects only `changed`, `unchanged`, and an ignored-cancellation planner. It does not cover the other four `DocumentFixStatus` values, change/close during planning, malformed edits, or multi-edit/multi-diagnostic scope. `tests/integration/lsp/lsp.test.ts` waits for version 2 without proving version 1 was never published, lacks a real-process Unicode and parser/system Finding case, and `StdioLspClient.shutdown()` discards the exit status instead of asserting zero.
+
+- Observation: The architecture check rejects only `node:`-prefixed filesystem/path/child-process specifiers from `src/lsp/**`.
+  Evidence: `import "fs/promises"`, `import "path"`, or `import "child_process"` is a valid equivalent Node builtin edge but does not match the current regular expression. Normalizing an optional `node:` prefix before checking closes the loophole without adding a dependency.
+
+- Observation: A fresh Node 24.18.0 full gate can turn valid Mermaid inputs into `system/parser-timeout` while the same affected files pass when isolated.
+  Evidence: The re-review's default `pnpm check` failed three tests across `rules-and-fixes.test.ts`, `validate-document.test.ts`, and `cli.test.ts` at the unchanged 10-second product deadline; the isolated three-file rerun passed 51/51 in 96.82 seconds. Node 22 remained green and Node 24 compatibility passed 16/16. This is a test-process contention blocker, not evidence that the parser deadline should be increased, and it belongs in a standalone performance plan.
 
 ## Decision Log
 
@@ -145,6 +171,14 @@ This stage creates only the LSP delivery adapter and its tests and documentation
   Rationale: Those changes affect core or CLI behavior and require their own before/after evidence. Stage 4 first creates the warm interactive workload that tells us which optimization is load-bearing. Logical cancellation that allows stale canonical parsing to finish is also excluded because active cancellation was accepted as the current responsiveness contract.
   Date/Author: 2026-07-27 / User and Codex (confirmed during design review).
 
+- Decision: Treat post-planner cancellation as an independent rejection gate even when the injected planner resolves normally, and contain diagnostic publisher rejection at every detached scheduler boundary.
+  Rationale: AbortSignal propagation and transport promises are cooperative dependencies. The adapter must still enforce its own no-action-after-cancellation contract and must not turn a failed normal/clearing/close publication into an unhandled rejection that can destabilize the server.
+  Date/Author: 2026-07-27 / Codex (independent implementation review resolution).
+
+- Decision: Only the complete `initializationOptions` value may be null. A present field-level null is invalid, and every invalid-params message is capped at 256 characters after project-owned validation.
+  Rationale: Optional JSON fields are either absent or grammar-valid; treating null as field absence weakens the strict contract. Bounded responses prevent attacker-controlled option or rule names from producing unbounded protocol output while retaining useful short messages.
+  Date/Author: 2026-07-27 / Codex (independent implementation review resolution).
+
 - Decision: Lock Stage 4 at the private built stdio LSP adapter described in this plan. Stop before editor-extension packaging, config-file discovery/watching, dynamic configuration, public exports/declarations/installed-package guarantees, Semantic Facts, new rules, MCP, SARIF, JUnit, GitHub Actions, and every deferred visual capability. Do not stage or commit without a separate request.
   Rationale: Unsaved-buffer diagnostics and planner-backed current-version Quick Fixes complete the accepted Stage 4 outcome. The excluded surfaces have distinct Stage 5/6 or deferred-roadmap contracts and would weaken stage exit criteria if mixed into this implementation.
   Date/Author: 2026-07-27 / User and Codex (final scope lock confirmed during design review).
@@ -153,11 +187,31 @@ This stage creates only the LSP delivery adapter and its tests and documentation
   Rationale: The roadmap identifies Stage 4 as the internal `v0.3` CLI + LSP release cut. This remains private and does not create package exports, declarations, publication metadata, or a public API promise.
   Date/Author: 2026-07-27 / Codex.
 
+- Decision: Reopen the Stage 4 closeout and describe the current state as “implementation complete; closeout blocked” until correctness hardening is complete and a separate performance plan makes the default dual-runtime gate durable.
+  Rationale: A fresh Node 24.18.0 `pnpm check` produced three product-level parser timeout Findings for valid inputs. An isolated rerun passed, so the implementation remains usable evidence, but the current worktree does not satisfy this plan's full-gate exit criterion and must not continue claiming completion.
+  Date/Author: 2026-07-28 / User and Codex.
+
+- Decision: Keep the 10-second canonical parser startup/request deadline unchanged and handle Node 24 full-suite resource contention in a standalone performance ExecPlan after correctness hardening.
+  Rationale: The affected tests pass in isolation, and the full-suite failure appears only when Vitest file workers and their canonical/CLI/LSP child processes compete. Raising the product deadline would weaken real editor and CLI failure responsiveness while hiding test scheduling pressure. The separate plan must accept three consecutive Node 24 full gates and one Node 22 full gate without skipping real process tests.
+  Date/Author: 2026-07-28 / User and Codex.
+
+- Decision: Treat the missing Quick Fix, process-lifecycle, projection, and architecture evidence as Stage 4 correctness work rather than performance work.
+  Rationale: These gaps concern protocol capability truth, stale-edit safety, observable process behavior, and enforceable dependency boundaries. Their outcomes do not depend on throughput or wall-clock optimization and can be made deterministic with injected dependencies, notification history, process barriers, and synthetic import edges.
+  Date/Author: 2026-07-28 / User and Codex.
+
+- Decision: Enable Quick Fixes only when the client declares literal Code Actions with `quickfix` in `codeActionKind.valueSet` and versioned `workspaceEdit.documentChanges`.
+  Rationale: Literal support alone says that the client can receive CodeAction objects; its value set says which action kinds it understands. A client that declares only `refactor` must continue receiving diagnostics but must neither see a `quickfix` provider nor receive Quick Fix results.
+  Date/Author: 2026-07-28 / Codex, confirmed by the existing protocol contract.
+
+- Decision: Revert private version surfaces to `0.2.0` while closeout is blocked, then restore the coordinated `0.3.0` bump only after the standalone performance plan satisfies the final runtime matrix.
+  Rationale: This plan already reserves `0.3.0` for Milestone 6 closeout. Reopening closeout while retaining the release-cut version would make package, CLI, LSP, JSON reference, roadmap, and tests disagree with the plan's own version policy.
+  Date/Author: 2026-07-28 / Codex.
+
 ## Outcomes & Retrospective
 
 Planning outcome: complete. This document turns the short Stage 4 roadmap entry into an independently reviewed and user-grilled executable delivery, scheduling, position, configuration, Code Action, lifecycle, performance, and recovery contract. The 29-branch design interview confirmed immutable notification-time snapshots, `planDocumentFixes()` as the Quick Fix safety boundary, private filesystem-free configuration, opaque URI schemes, minimal Diagnostics, document-wide action metadata, a repository-owned framed process harness, exact minimal capabilities, and official Mermaid plus the current Diagram Validation interface as the only product truth. No unresolved load-bearing design branch remains.
 
-Implementation outcome: not started. Update this section after each milestone and at closeout with observable behavior, final dependency versions, test counts, latency characterization, gaps, and lessons. A completed Stage 4 outcome must state whether editor diagnostics and safe fixes work on unsaved Mermaid and Markdown buffers and must list every intentionally deferred Stage 5/6 surface.
+Implementation outcome: feature implementation exists, but closeout is reopened and blocked. The private worktree exposes `node dist/lsp/main.js --stdio`; exact `mermaid` and `markdown` open buffers receive versioned diagnostics through Diagram Validation, and the server replans document-wide safe fixes before returning versioned edits. The implementation-time 29-file/242-test and timing records remain useful historical evidence, but the later review found incomplete Quick Fix/process/architecture coverage and reproduced three Node 24 full-suite parser timeouts. Milestone 7 now owns deterministic correctness hardening. A separate performance ExecPlan will own Vitest/canonical/LSP child-process contention while preserving the 10-second product deadline. Until both are complete, `DRAFT-PLAN.md`, `ARCHITECTURE.md`, package/tool versions, and this outcome must say “implementation complete; closeout blocked,” not Stage 4 complete. Stage 5 Semantic Facts, Stage 6 integrations, and every visual capability remain absent.
 
 ## Context and Orientation
 
@@ -264,6 +318,26 @@ Finalize `ARCHITECTURE.md` with implementation-proven filenames and Stage 4 evid
 
 Run frozen installs, focused suites, `pnpm check`, and `pnpm compatibility` under Node 22.20.0 and Node 24.18.0. Compatibility Evidence must remain 27 fixtures/108 observations unless a separately reviewed official-canonical change requires an update; LSP fixtures do not belong in that corpus. Record final direct/transitive LSP pins, test counts, representative protocol transcript, timing characterization, dependency list, and every design change in this living plan. Complete `Outcomes & Retrospective`, append a dated Revision Note, and stop before creating Semantic Facts or new rules.
 
+### Milestone 7: Close correctness evidence gaps before performance work
+
+This milestone reopens Stage 4 only for correctness hardening discovered by the post-implementation review. It changes no Mermaid/JSDOM/parser lifecycle, product timeout, debounce policy, file-level test concurrency, dependency, public surface, or later-stage behavior. At the end, protocol capability claims, Quick Fix rejection paths, real-process evidence, and architecture enforcement are complete and deterministic. Stage 4 still remains blocked on the separate Node 24 test-process-contention plan.
+
+First, tighten `supportsCodeActions()` in `src/lsp/server.ts`. A capable client must satisfy all three conditions: `codeActionLiteralSupport` exists, its `codeActionKind.valueSet` contains the exact `quickfix` kind, and `workspace.workspaceEdit.documentChanges` is true. Do not infer Quick Fix support merely because some literal kind is present. A client that lists only `refactor`, omits literal support, or omits versioned document changes receives the same diagnostics but no advertised `codeActionProvider`, and the always-registered handler returns an empty array. Use `CodeActionKind.QuickFix` rather than another string copy.
+
+Expand `tests/internal/lsp/server.test.ts` into the complete planner-safety matrix already promised by Milestone 4. Inject each `DocumentFixStatus`: `unchanged`, `conflict`, `invalid`, `unsafe`, and `non-idempotent` must return no action, while `changed` returns exactly the planner's nonempty edits. Separately prove an AbortError, an unexpected planner rejection with bounded stderr, request cancellation, a planner that ignores cancellation, a document version change during planning, close during planning, an out-of-bounds or zero-width defensive edit, multiple non-overlapping edits, multiple current fixable Diagnostics with only one in the request context, a forged/unknown context Diagnostic, and clients that fail each capability condition. For every refusal, assert an empty action list and no workspace apply request, command, file write, or raw error text. Retain a real built-in rule case that applies returned edits in memory and equals `planDocumentFixes().output`.
+
+Strengthen the raw-process harness in `tests/helpers/lsp/stdio-client.ts` without turning it into a product client. Preserve a complete notification history up to a fixed test-only bound in addition to the current waiter queue; fail explicitly on overflow rather than silently evicting an old publication whose absence a test might later claim. Expose a read-only way for tests to inspect publications after they have been consumed, and make `shutdown()` return the observed child `{ code, signal }` so callers can require code zero. Let the helper launch an explicitly supplied test entry while keeping `dist/lsp/main.js` as the default. Continue handling split frames, multiple frames per chunk, response/notification interleaving, stderr bounds, request timeouts, graceful shutdown, and forced cleanup.
+
+Add one test-only JavaScript entry under `tests/fixtures/lsp/` that creates the same official Node connection and `TextDocuments<TextDocument>` store, imports the built `createLanguageServer()` factory from `dist/lsp/server.js`, and injects a validator returning one bounded project-shaped `system/parser-runtime-failed` Finding. The fixture exists only to exercise system-Finding projection and framing through a real child process; it must not add product flags, environment hooks, exports, or dependencies. `tests/helpers/lsp/stdio-client.ts` itself must still import no private product module.
+
+Extend `tests/integration/lsp/lsp.test.ts` with the process claims missing from Milestone 5. Exercise omitted and whole-value-null initialization defaults separately, and send a long unknown option/rule name to prove the returned `-32602` message is at most 256 characters. Open a canonically valid buffer whose fixable marker follows a surrogate pair and combining mark, convert the returned range back through the same source text, and prove zero-based UTF-16 offsets. Open invalid Mermaid and assert the bounded `mermaid/syntax-error` Diagnostic; launch the injected fixture entry and assert the bounded locationless `system/parser-runtime-failed` Diagnostic at `(0,0)-(0,0)`. For rapid versions, wait for version 2, use the shutdown response and child exit as the process barrier, then inspect complete notification history and assert that no nonempty version-1 publication occurred. Assert graceful shutdown exits with code zero and keep the existing exit-without-shutdown code-one assertion.
+
+Harden `tests/architecture/module-import-boundaries.test.ts` by normalizing an optional `node:` prefix before testing Node builtins. From `src/lsp/**`, reject both forms of `fs`, `fs/promises`, `path`, and `child_process`; add synthetic failures for at least one prefixed and each unprefixed form. Keep the existing positive LSP package and validation-seam examples. Do not add a new lint dependency or weaken unresolved external-package handling.
+
+Finally, repair closeout state rather than rewriting historical evidence. Remove the stale instruction below the recorded protocol/timing transcript. Label commit `f1a9e30` as the base commit for an uncommitted Stage 4 worktree, not as a commit containing the implementation. Update `DRAFT-PLAN.md` and `ARCHITECTURE.md` to “implementation complete; closeout blocked,” retain Stage 5 as not started, and replace unsupported dual-runtime-pass claims with the current Node 22/compatibility successes plus the exact Node 24 failure and isolated-rerun evidence. Because this plan reserves `0.3.0` for closeout, restore package, CLI, LSP, JSON reference, README, and matching tests to `0.2.0`; the standalone performance plan reapplies the coordinated `0.3.0` cut only after its final gates pass. Preserve the unrelated README performance link and untracked performance snapshot exactly.
+
+At the end of this milestone, focused architecture, internal LSP, process LSP, parity, CLI, typecheck, build, and Node 22 full checks are green. A single Node 24 full check may be run only to refresh handoff evidence; it is not made green by increasing parser deadlines, retries, skipped process cases, or test-concurrency changes here. Record its result and stop. The next authorized work item is a standalone performance ExecPlan, not an inline optimization in this file.
+
 ## Concrete Steps
 
 All commands run from `/Users/wangzhihao/Documents/playground/mermaid-diagram-validator`. `/Users/wangzhihao/.codex/RTK.md` requires the `rtk` prefix for shell commands. Use pnpm for Node package work, patch-based edits for repository files, unique temporary directories in tests, and no commit unless the user separately asks.
@@ -349,6 +423,29 @@ Run the opt-in performance characterization only after behavior is green:
 
 Record three first-diagnostic samples and at least five subsequent-version samples. Use debounce `0` only for measuring runtime behavior after scheduling; also retain scheduler tests for the production default `150`. Do not compare a single result with a hard target.
 
+For Milestone 7, begin from the current dirty worktree and inspect every listed path before editing. Do not reset or reconstruct the existing Stage 4 implementation. Run the correctness suites in focused invocations so their result is not confused with the known full-suite contention blocker:
+
+    rtk git status --short --branch --untracked-files=all
+    rtk proxy pnpm typecheck
+    rtk pnpm build
+    rtk pnpm exec vitest run tests/architecture/module-import-boundaries.test.ts
+    rtk pnpm exec vitest run tests/internal/lsp
+    rtk pnpm exec vitest run tests/integration/lsp/lsp.test.ts
+    rtk pnpm exec vitest run tests/integration/lsp/parity.test.ts
+    rtk pnpm exec vitest run tests/integration/cli/cli.test.ts
+
+After focused correctness is green, run the ordinary Node 22 gate once. Run Node 24 compatibility once because it is independent evidence. A Node 24 full run is a diagnostic handoff to the standalone performance plan and may still fail with parser timeouts; do not adjust timeouts, Vitest workers, retries, or skips in this milestone.
+
+    rtk env PATH="/Users/wangzhihao/.nvm/versions/node/v22.20.0/bin:/Users/wangzhihao/Library/pnpm:/usr/bin:/bin:/usr/sbin:/sbin" pnpm check
+    rtk env PATH="/Users/wangzhihao/.nvm/versions/node/v22.20.0/bin:/Users/wangzhihao/Library/pnpm:/usr/bin:/bin:/usr/sbin:/sbin" pnpm compatibility
+    rtk env PATH="/Users/wangzhihao/.nvm/versions/node/v24.18.0/bin:/Users/wangzhihao/Library/pnpm:/usr/bin:/bin:/usr/sbin:/sbin" pnpm compatibility
+
+Finish Milestone 7 by inspecting only its intended correctness and status surfaces. The worktree remains uncommitted unless the user separately requests a commit.
+
+    rtk git diff --check
+    rtk git diff -- docs/plans/stage-4-lsp-adapter.md DRAFT-PLAN.md ARCHITECTURE.md README.md docs/reference/json-output-v2.md docs/reference/language-server.md package.json src/cli/main.ts src/lsp/server.ts tests/architecture/module-import-boundaries.test.ts tests/helpers/lsp tests/internal/lsp tests/integration/lsp tests/integration/cli tests/unit/cli
+    rtk git status --short --branch --untracked-files=all
+
 Run the final explicit runtime matrix. The personal pnpm shim directory is required because the NVM version directories do not contain pnpm shims:
 
     rtk env PATH="/Users/wangzhihao/.nvm/versions/node/v22.20.0/bin:/Users/wangzhihao/Library/pnpm:/usr/bin:/bin:/usr/sbin:/sbin" node --version
@@ -374,23 +471,23 @@ Inspect `README.md` separately because it was modified before planning. Do not i
 
 Stage 4 is accepted only when unsaved-buffer ownership, canonical/rule parity, UTF-16 projection, scheduling races, safe Code Actions, process lifecycle, architecture, and regression gates all pass.
 
-For initialization and transport, the built entry accepts `--stdio`, writes no unframed stdout, and answers `initialize` with exactly server name/version `mermaid-diagram-validator`/`0.3.0`, UTF-16, open/close incremental sync, and capability-gated Quick Fix. It advertises no unrelated providers. Missing/unknown transport arguments fail before protocol output with exit `2`. Invalid private options return an official `ResponseError` with JSON-RPC invalid params code `-32602` and a bounded message. The package remains private and process tests invoke the built path directly.
+For initialization and transport, the built entry accepts `--stdio`, writes no unframed stdout, and answers `initialize` with exactly server name/version `mermaid-diagram-validator` and the current private package version, UTF-16, open/close incremental sync, and capability-gated Quick Fix. During reopened closeout the version is `0.2.0`; the standalone performance plan restores `0.3.0` only at final closeout. It advertises no unrelated providers. Missing/unknown transport arguments fail before protocol output with exit `2`. Invalid private options return an official `ResponseError` with JSON-RPC invalid params code `-32602` and a message no longer than 256 characters. Omitted and whole-value-null initialization options each produce defaults in built-process tests. The package remains private and process tests invoke the built path directly.
 
 For source ownership, `didOpen` and `didChange` text is the only document content used while a URI is open. A file URI whose disk bytes differ proves that no file read occurs. Exact `mermaid` and `markdown` language ids validate; an unsupported id publishes empty diagnostics. Supported buffers accept any URI scheme as an opaque identity, including virtual custom schemes, without path conversion. Markdown extraction and host offsets remain owned by Diagram Validation. For identical snapshot text and the same resolved base rules, standalone and embedded process fixtures preserve CLI finding code, severity, message, and host offsets after LSP ranges are converted back to UTF-16 offsets; LSP Diagnostic source is independently fixed to `mermaid-validator`. CLI path overrides and ambient config discovery are not part of this Stage 4 parity claim.
 
-For positions, every Diagnostic range is zero-based UTF-16. LF, CRLF, BMP Unicode, surrogate pairs, combining marks, Markdown list/blockquote prefixes, multiple blocks, and end-of-file ranges are covered. A locationless Finding anchors at `(0,0)` without claiming exact precision. Diagnostic code/message remain the Finding values; severity mapping and source are deterministic.
+For positions, every Diagnostic range is zero-based UTF-16. LF, CRLF, BMP Unicode, surrogate pairs, combining marks, Markdown list/blockquote prefixes, multiple blocks, and end-of-file ranges are covered in pure projection tests, and at least one surrogate-pair-plus-combining-mark case crosses the real stdio process. A locationless Finding anchors at `(0,0)` without claiming exact precision. Diagnostic code/message remain the Finding values; severity mapping and source are deterministic.
 
 For scheduling, repeated notifications inside 150 ms coalesce per URI. A newer version immediately invalidates accepted cache, clears pending work, and aborts active work. Each notification is copied before the mutable TextDocument can change. Even if an injected validator ignores abort or a change arrives while diagnostic publication is awaiting, only the current URI/version/generation can publish and enter cache after the post-publication recheck. Separate documents do not cancel each other. Close and shutdown cancel work and clear state. AbortError is silent; an unexpected rejection produces no raw stack, clears current diagnostics, and does not crash the process.
 
-For diagnostics, each accepted publication includes the exact current document version. A syntax error, unsupported diagram type, parser/system failure, warning rule, and error-configured rule preserve core code/severity/validity meaning. Late version 1 work can never overwrite version 2 diagnostics. Closing a document publishes an empty list and no later nonempty list.
+For diagnostics, each accepted publication includes the exact current document version. A syntax error, unsupported diagram type, parser/system failure, warning rule, and error-configured rule preserve core code/severity/validity meaning. Built-process tests observe a real syntax error and a fixture-injected project-shaped system Finding through the same server factory and framing path. Late version 1 work can never overwrite version 2 diagnostics. The process helper retains bounded notification history; after version 2 and the shutdown/exit barrier, that history contains no nonempty version-1 publication. Closing a document publishes an empty list and no later nonempty list. Graceful shutdown exits zero; exit without shutdown exits one.
 
-For Quick Fix, only a capable client sees the provider; the always-registered handler returns an empty array for an incapable client. The handler matches code, message, severity, source, and range against current cached diagnostics, requires at least one current fixable request-context match, replans the entire current buffer with the same resolved rules, and returns exactly one versioned document-wide Quick Fix only for `DocumentFixStatus: "changed"`. The returned action lists every current cached fixable Diagnostic in the document, including those outside the triggering context, so its diagnostic metadata matches the full planner edit scope. The edit list and in-memory applied output equal the planner. A changed or closed buffer during planning, cancellation, every non-changed status, malformed defensive range, absent/current-cache mismatch, unknown context diagnostic, or incapable client returns no action. The action omits `isPreferred`. The server neither writes the file nor calls `workspace/applyEdit`.
+For Quick Fix, only a client with literal support, `quickfix` in `codeActionKind.valueSet`, and versioned `documentChanges` sees the provider; the always-registered handler returns an empty array when any condition is absent. The handler matches code, message, severity, source, and range against current cached diagnostics, requires at least one current fixable request-context match, replans the entire current buffer with the same resolved rules, and returns exactly one versioned document-wide Quick Fix only for `DocumentFixStatus: "changed"`. The returned action lists every current cached fixable Diagnostic in the document, including those outside the triggering context, so its diagnostic metadata matches the full planner edit scope. The edit list and in-memory applied output equal the planner. A changed or closed buffer during planning, AbortError or ignored cancellation, unexpected planner rejection, every non-changed status, malformed defensive range, absent/current-cache mismatch, unknown context diagnostic, or client supporting only another action kind returns no action. The action omits `isPreferred`. The server neither writes the file nor calls `workspace/applyEdit`.
 
-For performance, the final plan records three fresh-process didOpen-to-matching-diagnostic samples and five serialized, equivalent-work, warm same-process change samples with median/range and environment. Spawn-to-initialize, if reported, is separate. No timing number is an SLA. Acceptance requires one server process, scheduler debounce/cancellation, a deterministic worker-host test proving canonical worker reuse after successful requests, and no new worker pool/cache/daemon. The current CLI scan and all CLI tests remain non-regressed.
+For performance, the historical implementation record contains three fresh-process didOpen-to-matching-diagnostic samples and five serialized, equivalent-work, warm same-process change samples with median/range and environment. Spawn-to-initialize, if reported, is separate. No timing number is an SLA. Correctness hardening retains one server process, scheduler debounce/cancellation, a deterministic worker-host test proving canonical worker reuse after successful requests, and no new worker pool/cache/daemon. It does not change the 10-second parser deadline or Vitest concurrency. The standalone performance ExecPlan owns resource-contention measurements and the final repeated runtime gates.
 
-For architecture, LSP imports only its subtree and `src/validation/index.ts`; validation never imports LSP; adapters never import each other; LSP packages appear only under `src/lsp/**`; no LSP file imports Mermaid, JSDOM, mdast, Globby, Commander, Zod, compatibility engines, filesystem/path discovery, or child-process APIs. The project graph remains acyclic. MCP, Semantic Facts, rendering, geometry, image, layout, vision, editor extension, and future output modules remain absent.
+For architecture, LSP imports only its subtree and `src/validation/index.ts`; validation never imports LSP; adapters never import each other; LSP packages appear only under `src/lsp/**`; no LSP file imports Mermaid, JSDOM, mdast, Globby, Commander, Zod, compatibility engines, filesystem/path discovery, or child-process APIs. The checker rejects both `node:`-prefixed and unprefixed forms of `fs`, `fs/promises`, `path`, and `child_process`. The project graph remains acyclic. MCP, Semantic Facts, rendering, geometry, image, layout, vision, editor extension, and future output modules remain absent.
 
-For regression safety, `pnpm check` and `pnpm compatibility` pass under Node 22.20.0 and Node 24.18.0. Compatibility Evidence remains 27 fixtures/108 observations. Existing CLI terminal/JSON/config/discovery/fix behavior and exit precedence remain unchanged. The final plan records actual counts and representative protocol evidence.
+For Milestone 7 regression safety, all focused correctness suites, Node 22.20.0 `pnpm check`, and both runtime compatibility gates pass; Compatibility Evidence remains 27 fixtures/108 observations. Existing CLI terminal/JSON/config/discovery/fix behavior and exit precedence remain unchanged. Stage 4 final acceptance additionally requires the standalone performance plan to demonstrate three consecutive default `pnpm check` successes under Node 24.18.0 and one under Node 22.20.0, with no parser timeout, product-timeout increase, retry, skip, or removal of real process coverage. Until that evidence exists, Stage 4 remains closeout-blocked regardless of focused correctness success.
 
 ## Idempotence and Recovery
 
@@ -460,7 +557,32 @@ Current Stage 3 external scan characterization, recorded before planning and not
     Fresh JSON process seconds: 6.614, 4.514, 4.278
     Median/range: 4.514 / 4.278–6.614
 
-Add final Stage 4 protocol and timing transcripts here during implementation. Keep them short enough to prove initialize capabilities, current-version diagnostics, Quick Fix edit/version, shutdown, first-diagnostic samples, and warm samples without embedding full JSON-RPC sessions.
+Historical implementation-time Stage 4 protocol and performance evidence from the uncommitted worktree based on `f1a9e30`:
+
+    Initialize (capable client): UTF-16; open/close incremental sync; quickfix only; server 0.3.0
+    Unsaved diagnostic: version 1; flowchart/no-markdown-heading-in-label; line 1 characters 4–6
+    Quick Fix: one version-1 TextDocumentEdit deleting the planner-approved marker span
+    Lifecycle: shutdown response then exit 0; exit without shutdown 1; invalid transport 2
+
+    Node 22.20.0, pnpm 10.30.1, base commit f1a9e30 plus uncommitted Stage 4 changes, debounce 0, 28 UTF-16 units, 1 diagram
+    First diagnostic ms: 3330.7, 3322.2, 3430.5
+    First median/range ms: 3330.7 / 3322.2–3430.5
+    Warm change ms: 6.0, 5.8, 5.7, 5.4, 5.1
+    Warm median/range ms: 5.7 / 5.1–6.0
+    Cache note: mixed filesystem and operating-system caches; descriptive only, no SLA
+
+    Implementation-time full gate on Node 22.20.0 and Node 24.18.0: 29 files, 242 passed, 1 opt-in skipped
+    Implementation-time compatibility on both runtimes: 4 files, 16 tests, 27 fixtures, 108 observations
+
+Post-implementation review evidence that reopened closeout:
+
+    Node 22.20.0 pnpm check: 29 files passed, 242 tests passed, 1 opt-in skipped
+    Node 22.20.0 compatibility: 4 files passed, 16 tests passed, 27 fixtures, 108 observations
+    Node 24.18.0 pnpm check: 3 files failed, 26 passed, 1 skipped; 3 tests failed, 239 passed, 1 skipped
+    Node 24 failures: valid inputs reported system/parser-timeout after the unchanged 10000 ms product deadline
+    Node 24 isolated affected files: 3 files passed, 51 tests passed, 96.82 seconds
+    Node 24.18.0 compatibility: 4 files passed, 16 tests passed, 27 fixtures, 108 observations
+    Current status: implementation complete; correctness hardening pending; closeout blocked on standalone performance work
 
 ## Interfaces and Dependencies
 
@@ -631,6 +753,12 @@ No public package interface is created. Keep `private: true`; do not add declara
 
 2026-07-27: Confirmed that Stage 4 cold/warm samples and environment metadata remain in this living ExecPlan. No new `docs/performance/` artifact is created unless later optimization work establishes a maintained benchmark or retest contract.
 
-2026-07-27: Closed the initialize-capability loophole. Stage 4 advertises exactly server identity, UTF-16, open/close incremental synchronization, and capability-gated `quickfix`; unrelated extra providers are test failures unless a deliberate plan revision first adds their behavior and acceptance evidence.
+2026-07-27: Closed the unrelated-provider initialize-capability loophole. Stage 4 advertises exactly server identity, UTF-16, open/close incremental synchronization, and a `quickfix` provider; unrelated extra providers are test failures unless a deliberate plan revision first adds their behavior and acceptance evidence. A later review separately found that the Quick Fix gate must inspect the client's declared Code Action kind value set.
 
-2026-07-27: Completed the 29-branch user design-grilling pass and locked Stage 4 scope. The plan now records every confirmed decision inline, including strict initialization-only configuration, canonical validation, active cancellation, opaque URI schemes, minimal Diagnostics, current-context-triggered document-wide Quick Fixes that list all current fixable Diagnostics, deterministic race tests, raw stdio process coverage, descriptive performance evidence, and an exact initialize capability surface. Implementation remains not started, and all Stage 5/6, public-package, editor-extension, CI-output, MCP, and visual work remains outside this plan.
+2026-07-27: Completed the 29-branch user design-grilling pass and locked Stage 4 scope. At that review point implementation had not started. The plan records every confirmed decision inline, including strict initialization-only configuration, canonical validation, active cancellation, opaque URI schemes, minimal Diagnostics, current-context-triggered document-wide Quick Fixes that list all current fixable Diagnostics, deterministic race tests, raw stdio process coverage, descriptive performance evidence, and an exact initialize capability surface. All Stage 5/6, public-package, editor-extension, CI-output, MCP, and visual work remained outside the planned implementation.
+
+2026-07-27: Implemented and closed Stage 4. The private `v0.3.0` tree adds only the exact-pinned LSP server and text-document helper behind `src/lsp/`, preserves the Diagram Validation seam and official Mermaid verdict, delivers versioned unsaved-buffer diagnostics and planner-approved current-version Quick Fixes, records built-process parity/lifecycle and cold/warm evidence, and passes the complete and compatibility gates on both supported Node runtimes. No Stage 5/6 or visual scope was added, and no commit was created.
+
+2026-07-27: Independently reviewed and hardened the integrated implementation. The follow-up bounds every invalid-params message, rejects present null option fields, rechecks request cancellation after an uncooperative fix planner, and contains rejected diagnostic publications including close cleanup. Six focused regression cases raise the final full gate from 236 to 242 passing tests on both supported Node runtimes.
+
+2026-07-28: Reopened Stage 4 closeout after a fresh plan-against-implementation review and a one-question-at-a-time user interview. The review found that the Quick Fix gate ignores the client's supported kind value set, the Milestone 4 planner matrix and Milestone 5 process evidence are incomplete, bare Node builtin imports can bypass the LSP architecture check, and a fresh default Node 24 full gate produced three 10-second canonical parser timeouts although the affected files passed in isolation. Added Milestone 7 for correctness only, changed the current state to “implementation complete; closeout blocked,” retained the 10-second product deadline, reserved test-process contention for a standalone performance ExecPlan, and set final performance acceptance to three consecutive Node 24 full gates plus one Node 22 full gate without retries, skips, removed process tests, or timeout increases.
