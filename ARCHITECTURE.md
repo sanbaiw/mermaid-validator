@@ -2,7 +2,8 @@
 
 - Status: Accepted repository and module architecture
 - Date: 2026-07-14
-- Updated: 2026-07-25
+- Updated: 2026-07-30
+- Stage 4 state: Complete
 - Scope: Active non-visual roadmap in `DRAFT-PLAN.md`
 - Package shape: One private TypeScript package through Stage 5; Stage 6 decides public exports and any justified split
 
@@ -60,7 +61,7 @@ An arrow means that the module at the tail may import or call the module at the 
 ```mermaid
 flowchart LR
   CLI["CLI delivery adapter"] --> VALIDATION["Diagram Validation"]
-  LSP["LSP delivery adapter — Stage 4"] -.-> VALIDATION
+  LSP["LSP delivery adapter"] --> VALIDATION
   MCP["MCP delivery adapter — Stage 6"] -.-> VALIDATION
   COMPAT["Compatibility Evidence"] --> VALIDATION
   COMPAT --> OBSERVED["Observed engines"]
@@ -75,13 +76,13 @@ flowchart LR
   FACTS -.-> MERMAN["Merman adapter"]
 ```
 
-Solid arrows are active through Stage 3 or already exist as Compatibility Evidence. Dotted arrows show accepted later-stage direction and do not authorize creating those modules early.
+Solid arrows are active through Stage 4 or already exist as Compatibility Evidence. Dotted arrows show accepted later-stage direction and do not authorize creating those modules early.
 
 There are no sideways calls between delivery adapters. CLI does not call LSP or MCP; LSP does not shell out to CLI. All delivery adapters cross the same Diagram Validation interface.
 
-## Stage 3 active structure
+## Stage 4 active structure
 
-Stage 3 uses the following product structure. Compatibility Evidence remains under `src/compatibility/` as shown elsewhere in this document.
+Stage 4 uses the following product structure. Compatibility Evidence remains under `src/compatibility/` as shown elsewhere in this document.
 
 ```text
 src/
@@ -122,6 +123,13 @@ src/
     terminal-output.ts
     json-v2-output.ts
 
+  lsp/
+    main.ts
+    server.ts
+    contracts.ts
+    diagnostics.ts
+    validation-scheduler.ts
+
   compatibility/
     contracts.ts
     normalize.ts
@@ -149,7 +157,7 @@ tests/
   architecture/
 ```
 
-Markdown extraction, mapping, the Rule Engine, and in-memory fix planning are internal capabilities of Diagram Validation. Configuration, config-root path matching, filesystem discovery, file reads and writes, collection aggregation, and JSON-v2 remain CLI delivery responsibilities. Later-stage directories are still absent.
+Markdown extraction, mapping, the Rule Engine, and in-memory fix planning are internal capabilities of Diagram Validation. Configuration, config-root path matching, filesystem discovery, file reads and writes, collection aggregation, and JSON-v2 remain CLI delivery responsibilities. Open-buffer ownership, protocol lifecycle, UTF-16 Diagnostic projection, version-aware scheduling, and planner-backed Code Actions belong to the LSP delivery adapter. Later-stage directories are still absent.
 
 ## Module responsibilities
 
@@ -210,6 +218,19 @@ It may import only the Diagram Validation module interface. It must not import M
 
 Terminal and JSON output remain inside the CLI module while the CLI is their only real caller. Do not create a top-level `reporters/` module for hypothetical later formats. Promote output into a separate deep module only when a second real caller or independent release contract justifies that seam.
 
+### LSP delivery adapter: `src/lsp/`
+
+The LSP adapter translates open editor buffers and Language Server Protocol messages into Diagram Validation calls and protocol responses.
+
+It owns:
+
+- the stdio-only process entry, initialize/shutdown/exit lifecycle, and incremental text-document store;
+- immutable notification-time snapshots, per-URI debounce/cancellation/generation state, and versioned push diagnostics;
+- UTF-16 projection of host-document offsets into LSP ranges;
+- capability-gated, current-version Code Actions built only from `planDocumentFixes()`.
+
+It imports product behavior only through `src/validation/index.ts`. It does not import CLI configuration/discovery, read open documents from disk, write files, shell out, expose package-level APIs, or interpret Mermaid, Markdown, rule, or worker internals. Upstream LSP protocol values remain inside `src/lsp/`.
+
 ### Compatibility Evidence: `src/compatibility/`
 
 This supporting module preserves the Stage 0 corpus and proves dependency and engine assumptions. It is not part of the Diagram Validation product module.
@@ -252,7 +273,29 @@ Add `src/mcp/` as another delivery adapter over Diagram Validation. SARIF and JU
 
 ## Runtime data flow
 
-Stage 3 uses the following call and data flow.
+Stage 4 preserves the Stage 3 CLI flow and adds this editor delivery flow.
+
+```mermaid
+sequenceDiagram
+  participant Editor
+  participant LSP as LSP adapter
+  participant Validation as Diagram Validation
+  participant Worker as Canonical Syntax worker
+
+  Editor->>LSP: didOpen or didChange with buffer version
+  LSP->>LSP: Copy immutable text and debounce per URI
+  LSP->>Validation: Validate current Document Snapshot
+  Validation->>Worker: Serialized official Mermaid request
+  Worker-->>Validation: Canonical Syntax outcome
+  Validation-->>LSP: Versioned Validation Result
+  LSP-->>Editor: publishDiagnostics for current generation
+  Editor->>LSP: codeAction for a current fixable Diagnostic
+  LSP->>Validation: Plan all safe fixes for current snapshot
+  Validation-->>LSP: Planner-approved TextEdits
+  LSP-->>Editor: Versioned workspace edit
+```
+
+The CLI flow remains:
 
 ```mermaid
 sequenceDiagram
@@ -344,7 +387,7 @@ An import of `src/validation/document.ts`, `findings.ts`, `validate-document.ts`
 | `@mermaid-lint/core` | `src/compatibility/engines/**` until a later accepted use is planned |
 | `@mermanjs/web` | `src/compatibility/engines/**`; later the Stage 5 Merman Semantic Facts adapter |
 | CLI framework | `src/cli/**` only |
-| LSP packages | `src/lsp/**` only |
+| `vscode-languageserver` `10.1.0`; `vscode-languageserver-textdocument` `1.0.12` | `src/lsp/**` only |
 | MCP packages | `src/mcp/**` only |
 | `node:child_process` | Canonical Syntax worker host and compatibility process runner only |
 | `node:fs` and filesystem path discovery | Delivery adapters and compatibility tooling; not root Diagram Validation files |
@@ -357,6 +400,7 @@ Tests should cross the same interfaces as real callers whenever practical.
 
 - `tests/contract/validation/` imports only `src/validation/index.ts` and verifies the active in-memory module contract.
 - `tests/integration/cli/` invokes the built CLI and verifies files, output formats, exit codes, and process behavior.
+- `tests/integration/lsp/` invokes the built stdio server through a repository-owned framed client and verifies protocol lifecycle, unsaved buffers, diagnostics, parity, and Code Actions.
 - `tests/compatibility/` imports Compatibility Evidence and verifies engine observations and corpus invariants.
 - `tests/architecture/` checks dependency, package, path, and deferred-scope invariants.
 - Narrow internal tests may deep-import an implementation only from a clearly named `tests/internal/` location or be colocated with that internal module. Such exceptions must not be used as substitutes for module contract tests.
@@ -389,6 +433,7 @@ Representative violating cases include:
 - root Validation bypassing the Rules seam;
 - Rules importing delivery, compatibility, Canonical Syntax/Markdown internals, filesystem/process APIs, or comparison engines;
 - Zod imported outside the rule option adapter;
+- LSP importing CLI, Validation internals, filesystem/path/child-process APIs, or LSP packages imported outside `src/lsp/`;
 - a project import cycle.
 
 The checker must not silently exempt all tests. Any test-only exception must be path-scoped and documented.
@@ -423,3 +468,7 @@ The following structures are intentionally rejected for the current product:
 - future-stage placeholder directories.
 
 These decisions favor locality: each domain capability owns its interface and implementation, while delivery and upstream details stay behind narrow seams.
+
+## Stage 4 verification evidence
+
+Stage 4 is complete behind private version `0.3.0`. The architecture is unchanged: the durability fix is the test-orchestration policy `fileParallelism: false`, selected after the two-worker candidate produced a process-heavy CLI test timeout during repeated Node 24 proof. On the unchanged final surface, three consecutive default Node 24.18.0 full gates passed 29 files/264 tests with one opt-in skip in 273.31, 185.51, and 187.30 seconds; the Node 22.20.0 full gate passed the same counts in 229.84 seconds. Compatibility Evidence passed 4 files/16 tests over 27 fixtures/108 observations on both runtimes. The canonical 10-second startup/request deadline, Vitest's 20-second test timeout, real-process coverage, and no-retry policy remain unchanged. This closes the recorded local Stage 4 gate without claiming hosted-CI or cross-platform certification. The direct LSP pins remain `vscode-languageserver@10.1.0` and `vscode-languageserver-textdocument@1.0.12`, with `vscode-languageserver-protocol@3.18.2` owned transitively by the server package.

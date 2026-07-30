@@ -20,6 +20,8 @@ describe("evaluated engine versions", () => {
     expect(manifest.dependencies).toMatchObject({
       globby: "16.2.2",
       "mdast-util-from-markdown": "2.0.3",
+      "vscode-languageserver": "10.1.0",
+      "vscode-languageserver-textdocument": "1.0.12",
       zod: "4.4.3",
     });
     expect(manifest.devDependencies).toMatchObject({

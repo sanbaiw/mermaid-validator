@@ -32,7 +32,7 @@ describe("active non-visual dependency boundary", () => {
 
   it("does not create deferred or later-stage product directories", () => {
     for (const directory of [
-      "src/lsp", "src/extraction", "src/rules", "src/facts", "src/reporters",
+      "src/extraction", "src/rules", "src/facts", "src/reporters",
       "src/render", "src/geometry", "src/vision", "src/mcp",
     ]) {
       expect(existsSync(resolve(directory)), directory).toBe(false);

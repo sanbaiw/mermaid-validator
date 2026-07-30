@@ -1,8 +1,8 @@
 # Mermaid Diagram Validator
 
-A private TypeScript/Node validator that uses exact-pinned official Mermaid as the canonical syntax authority. Stage 3 validates standalone Mermaid files and exact-lowercase `mermaid` fenced blocks in Markdown, adds configurable rules, and plans or applies bounded safe fixes.
+A private TypeScript/Node validator that uses exact-pinned official Mermaid as the canonical syntax authority. Stage 4 validates standalone Mermaid files and exact-lowercase `mermaid` fenced blocks in Markdown through both the repository-aware CLI and an unsaved-buffer language server, with configurable rules and bounded safe fixes.
 
-Rendering, geometry checks, layout comparison, model-based visual review, LSP, Semantic Facts, public plugin loading, and MCP remain deferred.
+Rendering, geometry checks, layout comparison, model-based visual review, Semantic Facts, public plugin loading, and MCP remain deferred.
 
 ## Requirements and build
 
@@ -21,6 +21,14 @@ The package is private and has no supported package-level programmatic import. R
 ```sh
 node dist/cli/main.js [--format terminal|json] [--config path] [--fix|--fix-dry-run] [paths...]
 ```
+
+The private built language server supports stdio only:
+
+```sh
+node dist/lsp/main.js --stdio
+```
+
+It validates exact `mermaid` and `markdown` open-buffer language ids, publishes versioned UTF-16 diagnostics, and offers current-version planner-backed Quick Fixes to capable clients. It never rereads or writes an open document. See the [language server reference](./docs/reference/language-server.md).
 
 Supported file extensions are `.mmd`, `.mermaid`, and `.md`, case-insensitively. `.markdown`, `.mdx`, and URLs are not supported.
 
@@ -77,10 +85,10 @@ After discovery, unreadable files are reported on stderr while readable files ar
 | `2` | Configuration, discovery, usage, or file reads/writes made the collection incomplete. |
 | `3` | A canonical parser, Markdown extraction, rule runtime/protocol, or fix-safety system failure made validation indeterminate. |
 
-For mixed results, precedence is `3 > 2 > 1 > 0`. `--version` prints `0.2.0` without starting discovery or the parser worker.
+For mixed results, precedence is `3 > 2 > 1 > 0`. `--version` prints `0.3.0` without starting discovery or the parser worker.
 
 ## Development evidence and scope
 
 `pnpm check` runs strict typechecking, the build, repository hygiene, and all tests. `pnpm compatibility` reruns the independent Stage 0 evidence across 27 fixtures and 108 observations. The selected canonical profile and reuse boundary are recorded in [ADR 0001](./docs/adr/0001-validation-foundation.md).
 
-The package remains private and pre-release. JSON-v1 is historical only; Stage 3 extends v2 in place without a compatibility selector. The rule registration seam is repository-private through Stage 5. See [DRAFT-PLAN.md](./DRAFT-PLAN.md) for later stages and [ARCHITECTURE.md](./ARCHITECTURE.md) for module boundaries.
+The package remains private and pre-release. JSON-v1 is historical only; JSON-v2 remains the CLI schema. The rule registration and LSP initialization surfaces remain repository-private through Stage 5. See [DRAFT-PLAN.md](./DRAFT-PLAN.md) for later stages and [ARCHITECTURE.md](./ARCHITECTURE.md) for module boundaries.

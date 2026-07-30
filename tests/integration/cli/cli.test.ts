@@ -186,7 +186,7 @@ describe("built CLI", () => {
   });
 
   it("handles version and help without discovery", async () => {
-    await expect(run(["--version"])).resolves.toEqual({ status: 0, stdout: "0.2.0\n", stderr: "" });
+    await expect(run(["--version"])).resolves.toEqual({ status: 0, stdout: "0.3.0\n", stderr: "" });
     const help = await run(["--help"]);
     expect(help.status).toBe(0);
     expect(help.stdout).toContain("Usage: mermaid-validator [options] [paths...]");
@@ -214,7 +214,11 @@ describe("built CLI", () => {
 
   it("preserves the shebang and package bin mapping", async () => {
     expect((await readFile(entry, "utf8")).startsWith("#!/usr/bin/env node\n")).toBe(true);
+    expect((await readFile(resolve("dist/lsp/main.js"), "utf8")).startsWith("#!/usr/bin/env node\n")).toBe(true);
     const manifest = JSON.parse(await readFile("package.json", "utf8")) as { bin?: Record<string, string> };
-    expect(manifest.bin).toEqual({ "mermaid-validator": "./dist/cli/main.js" });
+    expect(manifest.bin).toEqual({
+      "mermaid-validator": "./dist/cli/main.js",
+      "mermaid-validator-language-server": "./dist/lsp/main.js",
+    });
   });
 });

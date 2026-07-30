@@ -10,7 +10,7 @@ const hosts: CanonicalSyntaxWorkerHost[] = [];
 function host(name: string, timeoutMs = 250): CanonicalSyntaxWorkerHost {
   const instance = new CanonicalSyntaxWorkerHost({
     workerPath: fixture(name),
-    startupTimeoutMs: 500,
+    startupTimeoutMs: 2_000,
     requestTimeoutMs: timeoutMs,
   });
   hosts.push(instance);
@@ -43,6 +43,23 @@ describe("CanonicalSyntaxWorkerHost", () => {
     ]);
     expect(outcomes.map((outcome) => outcome.kind)).toEqual(["accepted", "accepted", "accepted"]);
     expect(outcomes).not.toContainEqual(expect.objectContaining({ diagramType: "state" }));
+  });
+
+  it("reuses one successfully initialized worker for sequential requests", async () => {
+    const temporaryDirectory = await mkdtemp(join(tmpdir(), "stage1-worker-reuse-"));
+    const markerPath = join(temporaryDirectory, "launch-count");
+    const previousMarker = process.env.STAGE1_DELAYED_READY_MARKER;
+    process.env.STAGE1_DELAYED_READY_MARKER = markerPath;
+    try {
+      const instance = host("stage1-delayed-ready");
+      await expect(instance.request("first")).resolves.toMatchObject({ kind: "accepted" });
+      await expect(instance.request("second")).resolves.toMatchObject({ kind: "accepted" });
+      await expect(readFile(markerPath, "utf8")).resolves.toBe("1");
+    } finally {
+      if (previousMarker === undefined) delete process.env.STAGE1_DELAYED_READY_MARKER;
+      else process.env.STAGE1_DELAYED_READY_MARKER = previousMarker;
+      await rm(temporaryDirectory, { recursive: true, force: true });
+    }
   });
 
   it("classifies initialization failure without exposing raw stderr in the message", async () => {

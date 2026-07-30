@@ -21,15 +21,17 @@ When the durability proof succeeds, close Stage 4 as the private `0.3.0` CLI plu
 - [x] (2026-07-29 17:58Z) Drafted this standalone, self-contained performance stability and Stage 4 closeout plan.
 - [x] (2026-07-29 18:01Z) Reviewed this plan against `PLANS.md`, the Stage 4 scope lock, exact current paths, failure evidence, fallback logic, and final version surfaces. Added the missing dual-runtime frozen-install evidence, clarified final-tree gate ordering, and synchronized the predecessor handoff without authorizing implementation.
 - [x] (2026-07-29 18:17Z) Re-reviewed the proposed implementation against the current Vitest 4.1.10 code, Stage 4 design intent, and the dirty worktree. Kept the bounded two-worker design, moved completion claims after the evidence that justifies them, paired each compatibility run with its runtime's frozen install, and defined which later edits invalidate the durability proof.
-- [ ] Implement the bounded Vitest worker policy without changing product code, dependencies, parser deadlines, test deadlines, retries, skips, or real-process coverage.
-- [ ] Prepare the private `0.3.0` executable/version-assertion surface while Stage 4 documentation truthfully remains closeout-blocked.
-- [ ] Pass three consecutive default Node 24.18.0 full gates, the focused Node 24 compatibility gate, then one default Node 22.20.0 full gate and its focused compatibility gate on the unchanged final gate-sensitive surface.
-- [ ] Synchronize the successful evidence into every live documentation surface, complete an independent read-only implementation review, resolve concrete findings, and stop without staging or committing.
+- [x] (2026-07-30 05:04Z) Implemented `maxWorkers: 2` in `vitest.config.ts` without changing product code, dependencies, deadlines, retries, skips, or real-process coverage. The default Node 24.18.0 `pnpm check` preflight passed 29 files/264 tests with the existing one opt-in skip in 107.51 seconds and no parser timeout.
+- [x] (2026-07-30 05:05Z) Prepared the private `0.3.0` package, CLI, LSP, and matching assertion surface after the green preflight. The lockfile importer does not record the root package version, so no version-only lockfile edit was needed; completion documentation remains closeout-blocked pending the final matrix.
+- [x] (2026-07-30 05:16Z) Rejected the two-worker candidate during the first final matrix: Node 24 runs 1 and 2 passed in 109.23 and 131.05 seconds, but run 3 timed out the process-heavy CLI fix test at Vitest's unchanged 20-second limit. That exact test passed alone in 16.45 seconds. Applied the planned `fileParallelism: false` fallback and reset the final matrix to zero.
+- [x] (2026-07-30 05:35Z) Passed the restarted final matrix on the unchanged `fileParallelism: false` surface. Three consecutive default Node 24.18.0 full gates passed 29 files/264 tests with one opt-in skip in 273.31, 185.51, and 187.30 seconds; Node 24 compatibility passed 4 files/16 tests. The Node 22.20.0 full gate passed the same counts in 229.84 seconds and its compatibility gate passed 4 files/16 tests. Both compatibility summaries retained 27 fixtures/108 observations, the two known `pie-invalid-header` observer mismatches, 5/5 coordinate expectations, and 12/12 complete selected Merman fact summaries.
+- [x] (2026-07-30 05:35Z) Synchronized the successful evidence into every live version and Stage 4 documentation surface without editing the gate-sensitive surface.
+- [x] (2026-07-30 05:40Z) Completed the independent read-only implementation review. It found three Markdown-only living-plan inconsistencies: planning-time Vitest and branch state were labeled current, and documentation synchronization was not tracked separately from review. After those corrections, re-review found no remaining concrete issue. `git diff --check` and repository hygiene pass, the index is empty, and no staging or commit occurred.
 
 ## Surprises & Discoveries
 
 - Observation: The existing `sequence: { concurrent: false }` setting serializes tests inside a file but does not serialize test files.
-  Evidence: The exact installed Vitest 4.1.10 CLI reports `fileParallelism` as true by default and the default pool as `forks`. Its installed type definition says that `fileParallelism: false` forces `maxWorkers` to one. The current `vitest.config.ts` does not set either option.
+  Evidence: At the planning baseline, the exact installed Vitest 4.1.10 CLI reported `fileParallelism` as true by default and the default pool as `forks`. Its installed type definition says that `fileParallelism: false` forces `maxWorkers` to one. The then-current `vitest.config.ts` did not set either option; the final configuration now sets `fileParallelism: false`.
 
 - Observation: File-level process amplification, not an isolated LSP assertion, explains the current failure shape.
   Evidence: The test files that reach real canonical work include validation contracts, CLI integration, LSP process/parity, and one real planner path inside the internal LSP server suite. A Vitest fork has its own module-level canonical host, CLI tests launch another Node process whose validator forks a worker, and an LSP client launches a server that can fork its own canonical worker.
@@ -42,6 +44,9 @@ When the durability proof succeeds, close Stage 4 as the private `0.3.0` CLI plu
 
 - Observation: A single passing two-worker run is useful promotion evidence but is not the Stage 4 exit proof.
   Evidence: Earlier Node 24 implementation-time gates passed before a fresh later gate failed. This plan therefore requires three consecutive default full gates after the setting is checked into `vitest.config.ts`, and restarts that count after any configuration fallback or final-tree edit that affects tests or versions.
+
+- Observation: The two-worker candidate was not durable even though its preflight and first two final runs passed.
+  Evidence: Its third final Node 24 run timed out the process-heavy CLI fix test at Vitest's unchanged 20-second limit, while that exact test passed alone in 16.45 seconds. The planned one-worker fallback then passed all three restarted Node 24 gates and the Node 22 gate without changing product behavior or deadlines.
 
 - Observation: Completion status and repeated-runtime evidence cannot be written truthfully before the repeated gates that establish them.
   Evidence: The earlier milestone order told `DRAFT-PLAN.md` and `ARCHITECTURE.md` to mark Stage 4 complete with actual repeated evidence immediately after only one Node 24 preflight. Version constants must be final before acceptance, but completion prose must remain blocked until the complete runtime matrix succeeds.
@@ -62,6 +67,10 @@ When the durability proof succeeds, close Stage 4 as the private `0.3.0` CLI plu
 - Decision: If any required default Node 24 full-gate run fails with a canonical startup/request timeout or another credible resource-contention symptom at two workers, replace `maxWorkers: 2` with `fileParallelism: false` and restart the entire final runtime matrix from run one.
   Rationale: Vitest 4.1.10 defines `fileParallelism: false` as a one-worker policy, and the measured one-worker control passed. A deterministic fallback is preferable to retries, timeout inflation, test deletion, or an open-ended search for the highest workstation-specific parallelism.
   Date/Author: 2026-07-29 / Codex.
+
+- Decision: Select `fileParallelism: false` as the final runner policy after the two-worker candidate failed the third Node 24 durability run.
+  Rationale: The process-heavy CLI fix test hit Vitest's unchanged 20-second limit only in the full suite and passed unchanged in 16.45 seconds when isolated. This is credible file-worker resource contention under the plan's fallback rule, not evidence for changing product behavior or either timeout.
+  Date/Author: 2026-07-30 / Codex.
 
 - Decision: Do not introduce Vitest projects, custom schedulers, test tags, file-name allowlists, or a process-heavy suite partition in this plan.
   Rationale: Those mechanisms create more configuration and omission risk than the current 30-file private suite justifies. A bounded global worker budget is visible in one place and covers canonical, compatibility, CLI, and LSP child-process amplification together.
@@ -88,7 +97,7 @@ When the durability proof succeeds, close Stage 4 as the private `0.3.0` CLI plu
   Date/Author: 2026-07-29 / Codex.
 
 - Decision: Scope the Stage 4 durability claim to the recorded local workstation and both supported runtime lines; do not claim hosted-CI or cross-platform certification.
-  Rationale: The observed failure and promotion controls were measured on one 12-logical-CPU, 16 GiB Intel macOS host. The fixed two-worker configuration removes CPU-count-dependent Vitest defaults, but this plan has no evidence from other operating systems or hosted runners, and Stage 6 already owns broader production and CI hardening.
+  Rationale: The observed failure, fallback, and final matrix were measured on one 12-logical-CPU, 16 GiB Intel macOS host. The fixed one-worker configuration removes CPU-count-dependent Vitest defaults, but this plan has no evidence from other operating systems or hosted runners, and Stage 6 already owns broader production and CI hardening.
   Date/Author: 2026-07-29 / Codex.
 
 - Decision: Do not stage or commit during execution of this plan.
@@ -97,15 +106,15 @@ When the durability proof succeeds, close Stage 4 as the private `0.3.0` CLI plu
 
 ## Outcomes & Retrospective
 
-Planning outcome: complete and review-hardened. The current evidence identifies Vitest file-worker amplification as the remaining Stage 4 blocker and selects a two-worker default with a measured one-worker fallback. The review corrected the closeout/evidence order, runtime pairing, and durability invalidation rules. No implementation has been made by this planning pass.
+Planning outcome: complete and review-hardened. The evidence identified Vitest file-worker amplification as the remaining Stage 4 blocker, tested a two-worker default, and provided the deterministic one-worker fallback ultimately selected by implementation. The review corrected the closeout/evidence order, runtime pairing, and durability invalidation rules.
 
-Implementation outcome: pending. Completion requires a final private `0.3.0` tree, three consecutive default Node 24 full gates, one Node 22 full gate, both focused compatibility gates, independent review, synchronized living documents, and no product timeout or coverage weakening.
+Implementation, runtime proof, documentation synchronization, and independent review are complete. The final private `0.3.0` surface uses `fileParallelism: false`; three consecutive default Node 24 full gates, one Node 22 full gate, and both focused compatibility gates passed without product/test timeout changes, retries, added skips, removed process coverage, product-code changes, or dependency changes. The reviewer confirmed worker/deadline/coverage/version/status consistency, preservation of unrelated dirt, and an empty index after three Markdown-only findings were corrected. Stage 4 is closed locally; Stage 5 remains not started.
 
 ## Context and Orientation
 
 The repository is one private TypeScript ESM package in `/Users/wangzhihao/Documents/playground/mermaid-diagram-validator`. pnpm 10.30.1 manages exact-pinned dependencies. `.nvmrc` selects Node 24.18.0, while `package.json` also supports the verified Node 22 line. `pnpm check` runs TypeScript checking, a build into `dist/`, repository hygiene, and then the full Vitest suite.
 
-The current worktree is intentionally dirty. `main` is five commits ahead of `origin/main`. The Stage 4 LSP source, tests, reference page, dependency changes, roadmap/architecture edits, and correctness-hardening edits are not yet committed. `README.md` also includes a pre-existing performance-reference change and `docs/performance/2026-07-23-modern-agent-scan.md` is an unrelated untracked Stage 2 snapshot. Inspect and preserve every existing diff; never reset, clean, stage, overwrite, or reconstruct the tree.
+The current worktree is intentionally dirty. At planning time, `main` was five commits ahead of `origin/main`; the plan itself was later committed and pushed as `7590fc3`, so the current `main` exactly tracks `origin/main`. The Stage 4 LSP source, tests, reference page, dependency changes, roadmap/architecture edits, and correctness-hardening edits remain uncommitted. `README.md` also includes a pre-existing performance-reference change and `docs/performance/2026-07-23-modern-agent-scan.md` is an unrelated untracked Stage 2 snapshot. Inspect and preserve every existing diff; never reset, clean, stage, overwrite, or reconstruct the tree.
 
 `src/validation/canonical-syntax/worker-host.ts` owns the product canonical worker. A `CanonicalSyntaxWorkerHost` lazily forks `dist/validation/canonical-syntax/worker-entry.js`, waits up to 10 seconds for startup, waits up to 10 seconds for a request, and reuses the successful child within that Node process. The module-level `defaultHost` is shared only within one process. Each separate Vitest worker, CLI process, or LSP process has a separate module graph and can therefore create another canonical child.
 
@@ -225,7 +234,7 @@ Historical Stage 1/2/3 plan text, JSON-v1 examples, dependency versions such as 
 
 ## Validation and Acceptance
 
-This plan is accepted only on the final versioned worktree. `vitest.config.ts` contains either the promoted `maxWorkers: 2` policy or the evidence-triggered `fileParallelism: false` fallback. The ordinary `pnpm check` command uses that setting without a CLI or environment override.
+This plan is accepted only on the final versioned worktree. `vitest.config.ts` contains the evidence-triggered `fileParallelism: false` fallback selected after the promoted `maxWorkers: 2` candidate failed repeated proof. The ordinary `pnpm check` command uses that setting without a CLI or environment override.
 
 The final Node 24.18.0 gate-sensitive surface passes three consecutive default full gates without changing between runs. Each run passes all 29 ordinary test files and 264 ordinary tests, skips only the existing opt-in LSP performance file/test, and produces no canonical timeout for valid input. A retry does not count, a run concurrent with another repository test session does not count, and evidence from before the final executable version/assertion edits does not count. If an implementation-review fix intentionally adds a test, update the exact counts throughout this living plan and rerun the complete matrix; every ordinary test must pass and the sole opt-in skip must remain the only skip.
 
@@ -241,7 +250,7 @@ No Semantic Facts, new semantic rule, MCP, SARIF/JUnit, GitHub Action, editor ex
 
 ## Idempotence and Recovery
 
-The configuration edit is safe to repeat. `maxWorkers: 2` is one explicit scalar in `vitest.config.ts`; the fallback replaces it with `fileParallelism: false` rather than combining contradictory settings. Rebuilding `dist/` is repeatable and generated output must never be edited manually or emitted beside TypeScript source.
+The configuration edit is safe to repeat. The selected `fileParallelism: false` fallback is one explicit scalar in `vitest.config.ts`; do not reintroduce or combine it with the rejected `maxWorkers: 2` candidate. Rebuilding `dist/` is repeatable and generated output must never be edited manually or emitted beside TypeScript source.
 
 Frozen installation is also repeatable. If pnpm refuses a runtime switch because the existing modules directory would need interactive removal, rerun that same runtime's install as `pnpm install --frozen-lockfile --force`; do not change the lockfile, package manager, or dependency versions to work around the prompt.
 
@@ -296,21 +305,27 @@ Node 24 two-worker promotion control with no repository edit:
 
 These times characterize this workstation and are not SLAs. The acceptance signal is repeated correctness under the checked-in default, not a maximum duration or a requirement that two workers always outperform one.
 
+Final closeout evidence on the checked-in one-worker default:
+
+    Runner policy  fileParallelism: false
+    Node 24 run 1  29 files passed, 1 skipped; 264 tests passed, 1 skipped; 273.31s
+    Node 24 run 2  29 files passed, 1 skipped; 264 tests passed, 1 skipped; 185.51s
+    Node 24 run 3  29 files passed, 1 skipped; 264 tests passed, 1 skipped; 187.30s
+    Node 24 compatibility  4 files/16 tests; 27 fixtures/108 observations
+    Node 22 full gate      29 files passed, 1 skipped; 264 tests passed, 1 skipped; 229.84s
+    Node 22 compatibility  4 files/16 tests; 27 fixtures/108 observations
+    Preserved contracts   10000ms product deadline; 20000ms test timeout; no retry; real process tests retained
+
 ## Interfaces and Dependencies
 
 No product behavior or structural interface changes. `validateDocument()`, `planDocumentFixes()`, `DocumentSnapshot`, `ValidationResult`, canonical worker messages, CLI JSON-v2, and LSP protocol projections retain their Stage 4 contracts; only the coordinated private tool/server version metadata advances to `0.3.0`. No upstream type crosses a new seam.
 
-The only intended behavior-setting edit is equivalent to this inside the existing `test` object in `vitest.config.ts`:
-
-    // Canonical, CLI, and LSP suites create nested Node processes, so bound file-worker amplification.
-    maxWorkers: 2,
-
-If and only if the repeated Node 24 evidence rejects that candidate, replace it with:
+The final behavior-setting edit inside the existing `test` object in `vitest.config.ts` is:
 
     // Canonical, CLI, and LSP suites create nested Node processes, so serialize test files.
     fileParallelism: false,
 
-Do not set both. Keep `pool` unspecified so the exact Vitest 4.1.10 default remains `forks`, and keep isolation enabled. Add no package and change no exact dependency version.
+The repeated Node 24 evidence rejected the earlier `maxWorkers: 2` candidate. Keep `pool` unspecified so the exact Vitest 4.1.10 default remains `forks`, keep isolation enabled, and do not combine the final setting with `maxWorkers`. Add no package and change no exact dependency version.
 
 The final direct dependencies remain Commander 15.0.0, Globby 16.2.2, JSDOM 26.1.0, `mdast-util-from-markdown` 2.0.3, Mermaid 11.16.0, `vscode-languageserver` 10.1.0, `vscode-languageserver-textdocument` 1.0.12, and Zod 4.4.3. The LSP protocol remains transitive at 3.18.2. Development-only compatibility engines and test tool versions remain unchanged.
 
@@ -321,3 +336,7 @@ The final direct dependencies remain Commander 15.0.0, Globby 16.2.2, JSDOM 26.1
 2026-07-29: Completed the planning review against repository authorities and current paths. Added explicit frozen-install commands for both supported runtimes, clarified that only sessions started by this execution must be drained before a gate, changed the two-worker description to least restrictive rather than smallest, and retained implementation as the next unchecked milestone.
 
 2026-07-29: Re-reviewed the proposed implementation against the current Vitest 4.1.10 behavior and Stage 4 design intent. Kept the evidence-backed `maxWorkers: 2` policy and one-worker fallback, but moved completion claims after the full runtime proof, paired each compatibility gate with its runtime's frozen install, defined the gate-sensitive surface that must remain unchanged across durability runs, clarified when a review fix requires the complete matrix again, and scoped the evidence to the recorded local workstation rather than claiming hosted-CI or cross-platform certification.
+
+2026-07-30: Implemented the plan. The two-worker candidate passed its preflight and two final Node 24 gates but failed the third when a process-heavy CLI fix test exceeded Vitest's unchanged 20-second limit; the unchanged test passed alone in 16.45 seconds. Applied the planned `fileParallelism: false` fallback, repeated the Node 24 frozen install, and restarted acceptance. Three consecutive default Node 24 full gates, Node 24 compatibility, one default Node 22 full gate, and Node 22 compatibility all passed on the unchanged final private `0.3.0` surface. Product deadlines, real-process coverage, dependencies, architecture, retry/skip policy, later-stage scope, and unrelated worktree changes remained unchanged.
+
+2026-07-30: Completed independent read-only closeout review. The reviewer found and then verified corrections for three Markdown-only consistency issues involving planning-time Vitest state, planning-time branch state, and progress granularity. Re-review found no remaining concrete issue and confirmed the selected worker policy, unchanged deadlines, sole opt-in skip, real-process coverage, live version/status surfaces, preserved unrelated dirt, empty index, and clean diff/hygiene checks. The reviewer did not rerun the long matrix or reconstruct raw transcripts, so its no-override/no-concurrent-session assessment is an internal-consistency review of the living evidence rather than a second execution.

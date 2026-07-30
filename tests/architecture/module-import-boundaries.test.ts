@@ -14,6 +14,7 @@ interface Edge { source: string; specifier: string; target?: string }
 
 function assertModuleEdges(edges: readonly Edge[]): void {
   for (const edge of edges) {
+    const nodeBuiltin = edge.specifier.replace(/^node:/, "");
     if (edge.source.startsWith("src/cli/")) {
       expect(
         edge.target === undefined
@@ -22,8 +23,17 @@ function assertModuleEdges(edges: readonly Edge[]): void {
         JSON.stringify(edge),
       ).toBe(true);
     }
+    if (edge.source.startsWith("src/lsp/")) {
+      expect(
+        edge.target === undefined
+        || edge.target.startsWith("src/lsp/")
+        || edge.target === "src/validation/index.ts",
+        JSON.stringify(edge),
+      ).toBe(true);
+    }
     if (edge.source.startsWith("src/validation/")) {
       expect(edge.target?.startsWith("src/cli/") ?? false, JSON.stringify(edge)).toBe(false);
+      expect(edge.target?.startsWith("src/lsp/") ?? false, JSON.stringify(edge)).toBe(false);
       expect(edge.target?.startsWith("src/compatibility/") ?? false, JSON.stringify(edge)).toBe(false);
     }
     if (edge.source.startsWith("src/compatibility/") && edge.target !== undefined) {
@@ -66,18 +76,27 @@ function assertModuleEdges(edges: readonly Edge[]): void {
     if (edge.specifier === "zod") {
       expect(edge.source).toBe("src/validation/rules/options-schema.ts");
     }
+    if (edge.specifier === "vscode-languageserver"
+      || edge.specifier.startsWith("vscode-languageserver/")
+      || edge.specifier === "vscode-languageserver-textdocument") {
+      expect(edge.source.startsWith("src/lsp/"), JSON.stringify(edge)).toBe(true);
+    }
     if (edge.specifier === "@mermaid-lint/core" || edge.specifier === "@mermanjs/web") {
       expect(edge.source.startsWith("src/compatibility/engines/")).toBe(true);
     }
     if (edge.source.startsWith("src/validation/rules/")
-      && (/^node:(fs|fs\/promises|path|process)$/.test(edge.specifier)
+      && (/^(fs|fs\/promises|path|process)$/.test(nodeBuiltin)
         || edge.specifier === "@mermaid-lint/core"
         || edge.specifier === "@mermanjs/web")) {
       expect.unreachable(`Rules imported a forbidden external capability: ${JSON.stringify(edge)}`);
     }
-    if (/^node:(fs|fs\/promises|path)$/.test(edge.specifier)
+    if (/^(fs|fs\/promises|path)$/.test(nodeBuiltin)
       && /^src\/validation\/[^/]+\.ts$/.test(edge.source)) {
       expect.unreachable(`root Diagram Validation imported filesystem code: ${JSON.stringify(edge)}`);
+    }
+    if (edge.source.startsWith("src/lsp/")
+      && /^(child_process|fs|fs\/promises|path)$/.test(nodeBuiltin)) {
+      expect.unreachable(`LSP imported a forbidden external capability: ${JSON.stringify(edge)}`);
     }
   }
 }
@@ -172,8 +191,29 @@ describe("module import boundaries", () => {
     [{ source: "src/validation/rules/run-rules.ts", specifier: "@mermaid-lint/core" }],
     [{ source: "src/validation/rules/run-rules.ts", specifier: "@mermanjs/web" }],
     [{ source: "src/validation/rules/registry.ts", specifier: "zod" }],
-  ])("rejects forbidden Stage 3 edge %j", (edge) => {
+    [{ source: "src/lsp/server.ts", specifier: "../cli/main.js", target: "src/cli/main.ts" }],
+    [{ source: "src/lsp/server.ts", specifier: "../validation/document.js", target: "src/validation/document.ts" }],
+    [{ source: "src/lsp/server.ts", specifier: "../validation/canonical-syntax/index.js", target: "src/validation/canonical-syntax/index.ts" }],
+    [{ source: "src/lsp/server.ts", specifier: "node:fs/promises" }],
+    [{ source: "src/lsp/server.ts", specifier: "node:path" }],
+    [{ source: "src/lsp/server.ts", specifier: "node:child_process" }],
+    [{ source: "src/lsp/server.ts", specifier: "fs" }],
+    [{ source: "src/lsp/server.ts", specifier: "fs/promises" }],
+    [{ source: "src/lsp/server.ts", specifier: "path" }],
+    [{ source: "src/lsp/server.ts", specifier: "child_process" }],
+    [{ source: "src/cli/main.ts", specifier: "vscode-languageserver/node" }],
+    [{ source: "src/validation/validate-document.ts", specifier: "vscode-languageserver-textdocument" }],
+  ])("rejects forbidden active-stage edge %j", (edge) => {
     expect(() => assertModuleEdges([edge])).toThrow();
+  });
+
+  it("allows the Stage 4 LSP adapter to use its subtree, validation seam, and owned packages", () => {
+    expect(() => assertModuleEdges([
+      { source: "src/lsp/server.ts", specifier: "./contracts.js", target: "src/lsp/contracts.ts" },
+      { source: "src/lsp/server.ts", specifier: "../validation/index.js", target: "src/validation/index.ts" },
+      { source: "src/lsp/server.ts", specifier: "vscode-languageserver/node" },
+      { source: "src/lsp/server.ts", specifier: "vscode-languageserver-textdocument" },
+    ])).not.toThrow();
   });
 
   it("rejects a resolved project import cycle", () => {

@@ -1,7 +1,7 @@
 # Mermaid Diagram Validator — Implementation Plan
 
-- Status: Stages 0–3 complete; Stage 3 review-hardened
-- Updated: 2026-07-26
+- Status: Stages 0–4 complete; Stage 5 not started
+- Updated: 2026-07-30
 - Runtime: TypeScript on Node.js
 - Package manager: pnpm
 - Repository shape: one private package through Stages 1–5; Stage 6 decides which programmatic interfaces become public
@@ -191,7 +191,7 @@ A browser-backed parsing fallback is a contingency only if Stage 0 proves JSDOM 
 | Config discovery | Project-owned nearest-upward `mermaid-validator.config.json` search | Stage 2 | Use Node filesystem/path APIs for the single optional repository config and exact `--config` override. |
 | File discovery | `globby` `16.2.2` behind `src/cli/discovery.ts` | Stage 2 | Exact-pin one adapter-owned dependency for recursive discovery and nested `.gitignore` handling. |
 | Semantic facts | `@mermanjs/web` `0.7.0` behind an adapter | Stage 5 | Reuse only with completeness metadata; selected facts matched all 12 valid Stage 0 fixtures after recursive State-document extraction. |
-| LSP server | `vscode-languageserver`, `vscode-languageserver-textdocument` | Stage 4 | Publish a standalone stdio server. |
+| LSP server | `vscode-languageserver` `10.1.0`, `vscode-languageserver-textdocument` `1.0.12` | Stage 4 | Exact-pinned behind the private `src/lsp/` stdio adapter; protocol `3.18.2` remains transitive. |
 
 ### Deliberately excluded from the active stack
 
@@ -311,6 +311,8 @@ Release cut: `v0.2` repository-aware validator with configurable rules and safe 
 
 ### Stage 4 — LSP adapter
 
+Status: Completed on 2026-07-30 as the private `0.3.0` CLI plus LSP cut. Unsaved Mermaid/Markdown diagnostics, stale-result rejection, UTF-16 projection, strict initialization, bounded adapter failures, opaque URI schemes, and planner-backed versioned Quick Fixes are implemented. The default test runner now serializes test files with `fileParallelism: false` because the two-worker promotion candidate still produced one process-heavy CLI test timeout during repeated Node 24 proof. On the unchanged final surface, three consecutive default Node 24.18.0 full gates passed 264 tests with one opt-in skip in 273.31, 185.51, and 187.30 seconds; the Node 22.20.0 full gate passed the same counts in 229.84 seconds. Both runtime compatibility gates passed 16 tests over 27 fixtures/108 observations. The 10-second product parser deadline, 20-second Vitest timeout, real-process coverage, and no-retry policy remain unchanged. This is local Stage 4 closeout evidence, not a cross-platform or hosted-CI certification. Noncanonical fast mode remains deferred.
+
 Purpose: support IDEs and coding agents while the core remains small.
 
 Work:
@@ -320,7 +322,7 @@ Work:
 - Implement debounced validation, document-version checks, stale-job cancellation, and push diagnostics.
 - Convert canonical offsets to zero-based LSP UTF-16 ranges.
 - Expose safe fixes as quick-fix code actions.
-- Run canonical parsing and cheap rules on change; allow a configurable fast mode only when its non-canonical status is explicit.
+- Run canonical parsing and cheap rules on change. Keep a configurable noncanonical fast mode deferred until it has an accepted provenance and UI-labeling contract.
 
 Exit criteria:
 
