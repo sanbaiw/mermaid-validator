@@ -6,7 +6,7 @@ function record(value: unknown): Record<string, unknown> | undefined {
     : undefined;
 }
 
-function usefulMessage(error: unknown): string {
+function usefulMessage(error: unknown, line?: number): string {
   const value = record(error);
   const raw = typeof value?.message === "string"
     ? value.message
@@ -16,6 +16,12 @@ function usefulMessage(error: unknown): string {
         ? error
         : "Invalid Mermaid syntax";
   const collapsed = raw.replace(/\s+/g, " ").trim();
+  const jisonParseError = /^Parse error on line (\d+):/i.exec(collapsed);
+  if (jisonParseError) {
+    const messageLine = Number(jisonParseError[1]);
+    const diagramLine = Number.isFinite(line) && line! > 0 ? line! : messageLine;
+    return `Parse error near diagram line ${diagramLine}`;
+  }
   const withoutExpectedTokens = collapsed.replace(/\s+Expecting\s+.*$/i, "").trim();
   return withoutExpectedTokens.slice(0, 500) || "Invalid Mermaid syntax";
 }
@@ -47,7 +53,7 @@ export function normalizeMermaidError(
     : { ...(line === undefined ? {} : { line }), ...(column === undefined ? {} : { column }) };
   return {
     kind: "syntax-error",
-    message: `Mermaid syntax error: ${usefulMessage(error)}`,
+    message: `Mermaid syntax error: ${usefulMessage(error, line)}`,
     ...(diagramType === undefined ? {} : { diagramType }),
     ...(location === undefined ? {} : { location }),
     locationPrecision: location === undefined ? "document" : "approximate",

@@ -35,6 +35,29 @@ describe("LSP diagnostic projection", () => {
     });
   });
 
+  it("makes non-exact precision and help visible without changing ranges", () => {
+    const document = TextDocument.create("untitled:test", "mermaid", 7, "abc");
+    const projected = projectValidationResult(document, result([
+      finding({
+        locationPrecision: "approximate",
+        span: { startOffset: 1, endOffset: 2 },
+        help: "Inspect the host line.",
+      }),
+      finding({ locationPrecision: "document" }),
+    ]));
+    expect(projected[0]?.diagnostic).toMatchObject({
+      range: { start: { line: 0, character: 1 }, end: { line: 0, character: 2 } },
+      message: "[approximate location] Example\nHelp: Inspect the host line.",
+    });
+    expect(projected[1]?.diagnostic).toMatchObject({
+      range: {
+        start: { line: 0, character: 0 },
+        end: { line: 0, character: 0 },
+      },
+      message: "[document-level location] Example",
+    });
+  });
+
   it("maps every severity and preserves exact end-of-document positions", () => {
     const document = TextDocument.create("untitled:test", "mermaid", 7, "a\nb");
     const projected = projectValidationResult(document, result([

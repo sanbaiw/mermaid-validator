@@ -28,7 +28,12 @@ const base: ValidationResult = {
 describe("terminal reporter", () => {
   it("renders approximate line and column from a UTF-16 offset", () => {
     expect(formatTerminal(base, document.text)).toBe(
-      "/tmp/diagram.mmd:2:3: error mermaid/syntax-error: Mermaid syntax error: bad edge\n",
+      [
+        "/tmp/diagram.mmd:2:3: error mermaid/syntax-error [approximate]: Mermaid syntax error: bad edge",
+        "  2 |   😀A -- B",
+        "    | location is approximate; inspect this host line",
+        "",
+      ].join("\n"),
     );
   });
 
@@ -43,8 +48,42 @@ describe("terminal reporter", () => {
         locationPrecision: "document",
       }],
     }, "source")).toBe(
-      "/tmp/diagram.mmd: error mermaid/syntax-error: Mermaid syntax error: bad edge\n",
+      [
+        "/tmp/diagram.mmd: error mermaid/syntax-error [document]: Mermaid syntax error: bad edge",
+        "   | location applies to the document",
+        "",
+      ].join("\n"),
     );
+  });
+
+  it("omits the exact marker while preserving help and the final fixable marker", () => {
+    expect(formatTerminal({
+      ...base,
+      findings: [{
+        ...base.findings[0]!,
+        locationPrecision: "exact",
+        help: "Use a plain label.",
+        fixes: [{ span: { startOffset: 16, endOffset: 17 }, newText: "A" }],
+      }],
+    }, document.text)).toBe([
+      "/tmp/diagram.mmd:2:3: error mermaid/syntax-error: Mermaid syntax error: bad edge [fixable]",
+      "  2 |   😀A -- B",
+      "    | help: Use a plain label.",
+      "",
+    ].join("\n"));
+  });
+
+  it("bounds long source context around the span and never splits an astral character", () => {
+    const source = `${"a".repeat(81)}😀${"b".repeat(160)}`;
+    const output = formatTerminal({
+      ...base,
+      findings: [{ ...base.findings[0]!, span: { startOffset: 162, endOffset: 163 } }],
+    }, source);
+    const context = output.split("\n")[1]!.replace(/^\s+1 \| /, "");
+    const displayedSource = context.replace(/^\.\.\./, "").replace(/\.\.\.$/, "");
+    expect(displayedSource.length).toBeLessThanOrEqual(160);
+    expect(displayedSource).toContain("b");
+    expect(output).not.toMatch(/[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/u);
   });
 
   it("renders nothing for a result without findings", () => {
@@ -75,6 +114,18 @@ describe("JSON-v2 reporter", () => {
       },
     });
     expect(output).not.toMatch(/documentVersion|help|null|hash|stack|debugDetail/);
+  });
+
+  it("projects existing help without adding an engine-relative location", () => {
+    const output = formatJsonV2([{ document, result: {
+      ...base,
+      findings: [{ ...base.findings[0]!, help: "Inspect the host line." }],
+    } }], [], "0.1.0");
+    expect(JSON.parse(output).documents[0].findings[0]).toMatchObject({
+      locationPrecision: "approximate",
+      help: "Inspect the host line.",
+    });
+    expect(output).not.toContain("engineLocation");
   });
 
   it("marks partial collections incomplete and sorts bounded read errors", () => {

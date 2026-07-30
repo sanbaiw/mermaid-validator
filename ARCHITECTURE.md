@@ -92,6 +92,7 @@ src/
     findings.ts
     validate-document.ts
     fix-document.ts
+    syntax-help.ts
     rules/
       index.ts
       contracts.ts
@@ -170,7 +171,7 @@ It owns:
 - `DocumentSnapshot`, `Finding`, `ValidationResult`, and the asynchronous `validateDocument` operation;
 - stable diagnostic codes and location-precision semantics;
 - orchestration of active validation capabilities;
-- translation from internal Syntax Outcomes into module-interface Findings;
+- translation from internal Syntax Outcomes into module-interface Findings, including conservative project-owned advisory syntax help;
 - later source-map, rule-prerequisite, fix, and semantic-fact policies when their stages activate.
 
 It does not own:

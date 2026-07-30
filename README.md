@@ -66,11 +66,16 @@ Use `--config path` to load exactly one file. See the [configuration reference](
 
 ## Output and exit codes
 
-Valid input with no rule findings produces no terminal output. Findings use compiler-style host paths and coordinates; a fixable Finding ends with `[fixable]`:
+Valid input with no rule findings produces no terminal output. Findings use compiler-style paths and coordinates in the original host document; a fixable Finding ends with `[fixable]`. Non-exact locations are labeled and include bounded host context plus any project-owned advisory help:
 
 ```text
-/absolute/path/guide.md:12:7: error mermaid/syntax-error: Mermaid syntax error: <bounded detail>
+/absolute/path/guide.md:12:49: error mermaid/syntax-error [approximate]: Mermaid syntax error: Parse error near diagram line 7
+  12 |     Note over B: valid history;<br/>damaged history
+     | location is approximate; inspect this host line
+     | help: In a Sequence Note, ';' before '<br/>' ends the Mermaid statement; replace it with other punctuation or an escaped representation.
 ```
+
+`[approximate]` means the coordinate navigates near the area reported by Mermaid, not that it selects the exact failing token. `[document]` means no narrower trustworthy location exists. Exact Findings omit the precision marker.
 
 `--format json` always emits one deterministic JSON-v2 collection, even for one file. It includes per-document diagram counts, collection completeness, bounded read errors, and summary counts. See the [JSON-v2 reference](./docs/reference/json-output-v2.md).
 

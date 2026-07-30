@@ -22,7 +22,9 @@ Each document contains `uri`, `languageId` (`mermaid` or `markdown`), `diagramCo
 
 Every Finding contains `code`, `severity`, `message`, `source`, and `locationPrecision`. Optional `span`, `diagramType`, `engine`, `help`, and `fixes` fields are omitted when absent rather than serialized as `null`. Each fix contains a host-document `span` and replacement `newText`.
 
-Spans are zero-based, half-open UTF-16 code-unit offsets in the original host document. Markdown spans never refer to a temporary extracted string. Exact Mermaid coordinates are projected through the embedded offset map; locationless embedded outcomes use the responsible block body with `approximate` precision.
+Spans are zero-based, half-open UTF-16 code-unit offsets in the original host document. Markdown spans never refer to a temporary extracted string. Mermaid parser coordinates are projected through the embedded offset map with `approximate` precision; locationless embedded outcomes use the responsible block body with `approximate` precision.
+
+JSON exposes only this host-document `span`; there is no diagram-relative `engineLocation` field in the contract. Optional syntax `help` is project-owned advisory text. It may explain a conservatively recognized error shape, but it never changes the exact-pinned official Mermaid verdict, Finding severity, or validity.
 
 Stable Stage 3 codes are:
 
@@ -74,12 +76,13 @@ In dry-run, the top-level result and collection summary always describe unchange
         {
           "code": "mermaid/syntax-error",
           "severity": "error",
-          "message": "Mermaid syntax error: <bounded detail>",
+          "message": "Mermaid syntax error: Parse error near diagram line 15",
           "source": "mermaid",
           "span": { "startOffset": 84, "endOffset": 85 },
           "locationPrecision": "approximate",
-          "diagramType": "flowchart",
-          "engine": { "name": "mermaid", "version": "11.16.0" }
+          "diagramType": "sequence",
+          "engine": { "name": "mermaid", "version": "11.16.0" },
+          "help": "In a Sequence Note, ';' before '<br/>' ends the Mermaid statement; replace it with other punctuation or an escaped representation."
         }
       ],
       "fix": {

@@ -22,6 +22,11 @@ async function snapshot(path: string): Promise<DocumentSnapshot> {
   };
 }
 
+async function markdownSnapshot(path: string): Promise<DocumentSnapshot> {
+  const document = await snapshot(path);
+  return { ...document, languageId: "markdown" };
+}
+
 async function corpusPaths(): Promise<string[]> {
   const paths: string[] = [];
   for (const family of families) {
@@ -134,6 +139,36 @@ describe("validateDocument contract", () => {
     expect(text.slice(span.startOffset, span.endOffset)).toContain("pie");
     expect(text.slice(span.startOffset, span.endOffset)).not.toContain("intro");
     expect(text.slice(span.startOffset, span.endOffset)).not.toContain("```");
+  });
+
+  it("keeps the official Sequence Note verdict while adding host-bounded approximate help", async () => {
+    const document = await markdownSnapshot("tests/fixtures/markdown/sequence-note-semicolon.md");
+    const result = await validateDocument(document);
+    expect(result).toMatchObject({
+      valid: false,
+      diagramCount: 1,
+      findings: [{
+        code: "mermaid/syntax-error",
+        severity: "error",
+        source: "mermaid",
+        message: "Mermaid syntax error: Parse error near diagram line 15",
+        locationPrecision: "approximate",
+        diagramType: "sequence",
+        engine: { name: "mermaid", version: "11.16.0" },
+        help: "In a Sequence Note, ';' before '<br/>' ends the Mermaid statement; replace it with other punctuation or an escaped representation.",
+      }],
+    });
+    const finding = result.findings[0]!;
+    expect(finding.span).toBeDefined();
+    expect(finding.span!.startOffset).toBeGreaterThanOrEqual(0);
+    expect(finding.span!.endOffset).toBeLessThanOrEqual(document.text.length);
+    const hostLineStart = document.text.lastIndexOf("\n", finding.span!.startOffset - 1) + 1;
+    const hostLineEnd = document.text.indexOf("\n", finding.span!.startOffset);
+    expect(document.text.slice(hostLineStart, hostLineEnd)).toContain("Note over B: valid history");
+    expect(finding.message).not.toContain("^");
+
+    const repaired = { ...document, text: document.text.replace(";<br/>", ",<br/>") };
+    await expect(validateDocument(repaired)).resolves.toMatchObject({ valid: true, findings: [] });
   });
 
   it("propagates cancellation as AbortError", async () => {

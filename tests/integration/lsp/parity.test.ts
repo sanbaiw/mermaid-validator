@@ -15,6 +15,8 @@ interface CliFinding {
   readonly severity: "error" | "warning" | "info";
   readonly message: string;
   readonly span?: { readonly startOffset: number; readonly endOffset: number };
+  readonly locationPrecision: "exact" | "approximate" | "document";
+  readonly help?: string;
 }
 
 interface CliDocument {
@@ -94,7 +96,11 @@ function comparableCli(findings: readonly CliFinding[]): readonly object[] {
   return findings.map((finding) => ({
     code: finding.code,
     severity: finding.severity,
-    message: finding.message,
+    message: `${finding.locationPrecision === "approximate"
+      ? "[approximate location] "
+      : finding.locationPrecision === "document"
+        ? "[document-level location] "
+        : ""}${finding.message}${finding.help === undefined ? "" : `\nHelp: ${finding.help}`}`,
     span: finding.span,
   }));
 }

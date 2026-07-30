@@ -1,5 +1,5 @@
 import { execFile } from "node:child_process";
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
@@ -321,7 +321,33 @@ describe("built stdio language server", () => {
       severity: 1,
       source: "mermaid-validator",
     });
+    expect(syntax.diagnostics[0]!.message).toMatch(/^\[approximate location\] /);
     expect(syntax.diagnostics[0]!.message.length).toBeLessThanOrEqual(256);
+
+    const regressionUri = "untitled:sequence-note.md";
+    const regressionText = await readFile("tests/fixtures/markdown/sequence-note-semicolon.md", "utf8");
+    value.notify("textDocument/didOpen", {
+      textDocument: {
+        uri: regressionUri,
+        languageId: "markdown",
+        version: 2,
+        text: regressionText,
+      },
+    });
+    const regression = await value.waitForNotification<PublishDiagnostics>(
+      "textDocument/publishDiagnostics",
+      (params) => params.uri === regressionUri && params.version === 2 && params.diagnostics.length > 0,
+    );
+    expect(regression.diagnostics[0]).toMatchObject({
+      code: "mermaid/syntax-error",
+      severity: 1,
+      source: "mermaid-validator",
+      message: "[approximate location] Mermaid syntax error: Parse error near diagram line 15\nHelp: In a Sequence Note, ';' before '<br/>' ends the Mermaid statement; replace it with other punctuation or an escaped representation.",
+    });
+    const noteOffset = regressionText.indexOf("    Note over B: valid history");
+    const noteLine = regressionText.slice(0, noteOffset).split("\n").length - 1;
+    expect(regression.diagnostics[0]!.range.start.line).toBe(noteLine);
+    expect(regression.diagnostics[0]!.range.end.line).toBe(noteLine);
     await expect(value.shutdown()).resolves.toEqual({ code: 0, signal: null });
 
     const system = client({

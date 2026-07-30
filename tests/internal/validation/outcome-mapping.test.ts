@@ -46,6 +46,28 @@ describe("syntax outcome mapping", () => {
     });
   });
 
+  it("attaches conservative help to the reported Sequence Note line", () => {
+    const sequenceDocument: DocumentSnapshot = {
+      uri: "file:///sequence.mmd",
+      languageId: "mermaid",
+      text: "sequenceDiagram\nNote over B: valid;<br/>damaged\n",
+    };
+    const mapped = resultFromSyntaxOutcome(sequenceDocument, {
+      kind: "syntax-error",
+      message: "Mermaid syntax error: Parse error near diagram line 2",
+      diagramType: "sequence",
+      location: { line: 2, column: 21 },
+      locationPrecision: "approximate",
+      engineVersion: "11.16.0",
+    });
+
+    expect(mapped.findings[0]).toMatchObject({
+      code: "mermaid/syntax-error",
+      locationPrecision: "approximate",
+      help: "In a Sequence Note, ';' before '<br/>' ends the Mermaid statement; replace it with other punctuation or an escaped representation.",
+    });
+  });
+
   it.each([
     ["initialization", "system/parser-initialization-failed"],
     ["timeout", "system/parser-timeout"],

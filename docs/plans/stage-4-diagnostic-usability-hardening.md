@@ -18,9 +18,9 @@ The completed behavior must be visible with one built CLI invocation. For a loca
 - [x] (2026-07-30 12:20Z) Reproduced the motivating case with official Mermaid 11.16.0, confirmed the reported diagram coordinate `15:49`, counted the semicolon at column 47, confirmed comma/removal/escaped variants are accepted, and revalidated the repaired external wiki as 37 documents, 19 diagrams, zero findings, and a complete collection under supported Node 22.22.2.
 - [x] (2026-07-30 12:20Z) Defined the scope and ownership decisions in this standalone ExecPlan: host spans remain the only external location, advisory help belongs to Diagram Validation, and terminal/LSP formatting remains adapter-owned.
 - [x] (2026-07-30 12:25Z) Reviewed the authored plan against every mandatory `PLANS.md` section, current paths and interfaces, Stage 4 architecture ownership, active-stage limits, bounded-output and Unicode risks, exact non-goals, and the unavailable local Node 24 precondition; whitespace and path checks passed, and implementation remains unstarted.
-- [ ] Milestone 1: add the repository-local regression fixture, normalize ambiguous upstream coordinate wording, and attach conservative syntax help without changing the official verdict or source mapping.
-- [ ] Milestone 2: expose precision, bounded host context, and help through terminal and LSP delivery adapters while leaving JSON-v2 structurally unchanged.
-- [ ] Milestone 3: update current user documentation, run the focused and full dual-runtime gates, complete a falsification-oriented review, and record actual evidence in this living plan.
+- [x] (2026-07-30 12:31Z) Milestone 1: added the repository-local regression fixture, normalized ambiguous upstream coordinate wording, attached conservative line-local syntax help without changing the official verdict or source mapping, and passed 4 focused files / 26 tests under Node 22.22.2 after rebuilding the worker.
+- [x] (2026-07-30 12:36Z) Milestone 2: exposed precision, bounded host context, and help through terminal and LSP delivery adapters while leaving JSON-v2 structurally unchanged; the focused real-process CLI and LSP cases passed under Node 22.22.2, and the built regression reports host `20:49` for approximate diagram line 15.
+- [x] (2026-07-30 12:44Z) Milestone 3: updated current user and architecture documentation; passed the full ordinary and compatibility gates under Node 24.18.0 and Node 22.22.2; completed a falsification-oriented review with no unresolved issue; and recorded the final evidence below.
 
 ## Surprises & Discoveries
 
@@ -44,6 +44,12 @@ The completed behavior must be visible with one built CLI invocation. For a loca
 
 - Observation: The repository selects Node 24.18.0, but the currently available local NVM directory observed while authoring this plan contains Node 22.22.2 and not Node 24.18.0.
   Evidence: `.nvmrc` contains `24.18.0`; `/Users/wangzhihao/.nvm/versions/node` currently lists `v22.22.2` and `v23.3.0` among older runtimes but no `v24.18.0`. The implementation must not claim a Node 24 gate until that supported runtime is actually available and used, and must not substitute unsupported default Node 23.
+
+- Observation: The public validation contract test reaches the compiled Canonical Syntax worker even when Vitest imports current TypeScript sources.
+  Evidence: The first focused run passed the direct normalization/help tests but returned the old caret-bearing message through `validateDocument()`; rebuilding `dist/` made the unchanged end-to-end test pass, yielding 4 files / 26 tests.
+
+- Observation: A frozen pnpm install in this non-interactive environment needs `CI=true`, and the newly installed Node 24 runtime does not contain its own pnpm shim.
+  Evidence: The first frozen install stopped with `ERR_PNPM_ABORTED_REMOVE_MODULES_DIR_NO_TTY`; `CI=true` allowed the deterministic reinstall. For the Node 24 matrix, putting `/Users/wangzhihao/.nvm/versions/node/v24.18.0/bin` before the existing Node 22 pnpm shim ran pnpm 10.30.1 with Node 24.18.0.
 
 ## Decision Log
 
@@ -103,11 +109,15 @@ The completed behavior must be visible with one built CLI invocation. For a loca
   Rationale: The required implementation fits existing TypeScript, Node, Vitest, CLI, and LSP capabilities. The package remains private and repository instructions require separate authorization for Git publication actions.
   Date/Author: 2026-07-30 / Codex.
 
+- Decision: Use the installed pnpm 10.30.1 shim from the Node 22 directory for the Node 24 acceptance matrix while keeping Node 24 first in `PATH`.
+  Rationale: The repository-pinned Node 24 runtime installed without a pnpm executable, while the existing shim uses `/usr/bin/env node`; path order therefore preserves the exact pnpm version and executes it under Node 24.18.0 without changing repository dependencies.
+  Date/Author: 2026-07-30 / Codex.
+
 ## Outcomes & Retrospective
 
-Planning outcome: complete. The plan converts one real external failure into a bounded product regression and resolves the important design choices before implementation: canonical verdict versus heuristic advice, host versus diagram coordinates, precision presentation in each delivery adapter, code-frame bounds, and explicit non-goals. Implementation and acceptance remain pending.
+Implementation and acceptance are complete. The repository-local Sequence Note fixture is rejected only by exact-pinned Mermaid 11.16.0, while replacing `;<br/>` with `,<br/>` is accepted. The core Finding preserves the upstream approximate coordinate, normalizes the message to `Parse error near diagram line 15`, and adds a conservative advisory only for the same reported Sequence Note line. The built terminal projection reports host `20:49`, labels it approximate, shows bounded host context without a caret, and separates help; JSON-v2 remains schema version 2 with only the host span; the LSP exposes the same precision/help semantics while retaining the host UTF-16 range.
 
-At implementation completion, replace this paragraph with the actual user-visible behavior, focused and full test counts, exact Node runtimes, compatibility counts, review findings, and any remaining limitations. Compare the result against the motivating Sequence Note case and record whether the narrow help detector remained sufficiently conservative.
+The full ordinary gate passed under Node 24.18.0 and Node 22.22.2 with 31 test files / 281 tests passed and the existing one performance file/test skipped. Compatibility passed under both runtimes with 4 files / 16 tests, 27 fixtures, and 108 observations. The final falsification review found no unbounded terminal line, malformed surrogate, coordinate snapping, `engineLocation`, JSON schema change, adapter ownership reversal, dependency change, Compatibility Evidence change, Stage 5 work, or visual work. The intentional limitation is that help recognizes only the literal same-line Sequence `Note ...: ...;<br/>...` shape; other Mermaid errors remain canonical and receive no speculative advice.
 
 ## Context and Orientation
 
@@ -130,11 +140,11 @@ The current data flow is:
 
 `src/validation/canonical-syntax/mermaid-runtime.ts` is the only product file allowed to import Mermaid or JSDOM. It detects the diagram family opportunistically and always awaits official `mermaid.parse()` for the canonical verdict. `src/validation/canonical-syntax/normalize-mermaid-error.ts` is the only product file that understands raw Mermaid error shapes. It currently collapses the raw message, strips expected-token tails, keeps at most 500 UTF-16 code units, chooses structured line and column, and marks any usable coordinate approximate.
 
-`src/validation/validate-document.ts` converts a Syntax Outcome into a Finding. For Markdown it validates each extracted diagram and projects the diagram-relative span through `src/validation/markdown/` into the original host text. This root validation layer owns stable diagnostic meaning and is therefore where syntax help must be attached. Add `src/validation/syntax-help.ts` as a private root-validation helper; do not export it from `src/validation/index.ts`.
+`src/validation/validate-document.ts` converts a Syntax Outcome into a Finding. For Markdown it validates each extracted diagram and projects the diagram-relative span through `src/validation/markdown/` into the original host text. This root validation layer owns stable diagnostic meaning and attaches conservative syntax help through the private `src/validation/syntax-help.ts` helper, which is not exported from `src/validation/index.ts`.
 
-`src/cli/terminal-output.ts` owns terminal formatting. It currently derives one-based host line and column from a Finding's host offset and emits one compiler-style line. It hides location precision, source context, and help. `src/cli/json-v2-output.ts` already emits host span, `locationPrecision`, and optional `help`; it requires no structural change. CLI modules may import only their own files and `src/validation/index.ts`.
+`src/cli/terminal-output.ts` owns terminal formatting. It derives one-based host line and column from a Finding's host offset, keeps the compiler-style first line, exposes non-exact precision, and adds one bounded host source line plus separate precision/help notes. `src/cli/json-v2-output.ts` emits host span, `locationPrecision`, and optional `help` without an engine-relative location or schema change. CLI modules may import only their own files and `src/validation/index.ts`.
 
-`src/lsp/diagnostics.ts` owns conversion from Findings to LSP Diagnostics. It currently converts host UTF-16 offsets to zero-based LSP ranges and preserves code, severity, and message. A Finding without a valid span is anchored at `(0,0)–(0,0)`. It hides location precision and help. LSP modules may import only their own files and `src/validation/index.ts`; they must not import CLI formatting helpers.
+`src/lsp/diagnostics.ts` owns conversion from Findings to LSP Diagnostics. It converts host UTF-16 offsets to zero-based LSP ranges, preserves code and severity, prefixes non-exact precision in the message, and appends help when present. A Finding without a valid span is anchored at `(0,0)–(0,0)`. LSP modules may import only their own files and `src/validation/index.ts`; they do not import CLI formatting helpers.
 
 Product regression fixtures belong under `tests/fixtures/`. `tests/contract/validation/` proves the public in-memory module seam, `tests/internal/` may deep-import focused private helpers, `tests/integration/cli/` invokes the built CLI, and `tests/integration/lsp/` invokes the built stdio server. `fixtures/compatibility/` and `tests/compatibility/` remain unchanged Stage 0 evidence.
 
@@ -254,30 +264,30 @@ After Milestone 2, typecheck, build, and run the focused adapter tests:
     rtk /Users/wangzhihao/.nvm/versions/node/v22.22.2/bin/node node_modules/typescript/bin/tsc -p tsconfig.build.json
     rtk /Users/wangzhihao/.nvm/versions/node/v22.22.2/bin/node node_modules/vitest/vitest.mjs run tests/unit/cli/reporters.test.ts tests/integration/cli/cli.test.ts tests/internal/lsp/diagnostics.test.ts tests/integration/lsp/lsp.test.ts tests/integration/lsp/parity.test.ts
 
-Exercise the built regression manually. Replace `HOST_LINE`, `HOST_COLUMN`, and `DIAGRAM_LINE` in this plan with the observed stable values after the fixture is checked in:
+Exercise the built regression manually. The checked-in fixture reports host line 20, host column 49, and diagram line 15:
 
     rtk /Users/wangzhihao/.nvm/versions/node/v22.22.2/bin/node dist/cli/main.js tests/fixtures/markdown/sequence-note-semicolon.md
     rtk /Users/wangzhihao/.nvm/versions/node/v22.22.2/bin/node dist/cli/main.js --format json tests/fixtures/markdown/sequence-note-semicolon.md | rtk jq '{schemaVersion, complete, valid, documents, summary}'
 
 The terminal command must exit 1 and produce the shape documented in Milestone 2. The JSON command must exit 1, remain parseable schema version 2, include the host span, approximate precision, and help, and contain no `engineLocation`.
 
-For final acceptance, use Node 24.18.0 from `.nvmrc` and one Node 22 runtime satisfying the package engine range. At planning time Node 24.18.0 is not installed in the observed NVM directory. If it remains unavailable, obtain approval to install or otherwise provide that supported runtime; do not substitute Node 23 and do not report the Node 24 gate as passed. Once present, use explicit PATH values so pnpm and Node agree. The expected paths are:
+For final acceptance, use Node 24.18.0 from `.nvmrc` and one Node 22 runtime satisfying the package engine range. Node 24.18.0 was absent during planning and installed during implementation. On another host where it is unavailable, obtain approval to install or otherwise provide that supported runtime; do not substitute Node 23 or report the Node 24 gate as passed. Use explicit PATH values so pnpm and Node agree. The accepted paths are:
 
-    Node 24 PATH: /Users/wangzhihao/.nvm/versions/node/v24.18.0/bin:/Users/wangzhihao/Library/pnpm:/usr/bin:/bin:/usr/sbin:/sbin
-    Node 22 PATH: /Users/wangzhihao/.nvm/versions/node/v22.22.2/bin:/Users/wangzhihao/Library/pnpm:/usr/bin:/bin:/usr/sbin:/sbin
+    Node 24 PATH: /Users/wangzhihao/.nvm/versions/node/v24.18.0/bin:/Users/wangzhihao/.nvm/versions/node/v22.22.2/bin:/usr/bin:/bin:/usr/sbin:/sbin
+    Node 22 PATH: /Users/wangzhihao/.nvm/versions/node/v22.22.2/bin:/usr/bin:/bin:/usr/sbin:/sbin
 
 Run the primary Node 24 matrix serially:
 
-    rtk proxy env PATH='/Users/wangzhihao/.nvm/versions/node/v24.18.0/bin:/Users/wangzhihao/Library/pnpm:/usr/bin:/bin:/usr/sbin:/sbin' pnpm install --frozen-lockfile
-    rtk proxy env PATH='/Users/wangzhihao/.nvm/versions/node/v24.18.0/bin:/Users/wangzhihao/Library/pnpm:/usr/bin:/bin:/usr/sbin:/sbin' pnpm check
-    rtk proxy env PATH='/Users/wangzhihao/.nvm/versions/node/v24.18.0/bin:/Users/wangzhihao/Library/pnpm:/usr/bin:/bin:/usr/sbin:/sbin' pnpm compatibility
+    rtk proxy env CI=true PATH='/Users/wangzhihao/.nvm/versions/node/v24.18.0/bin:/Users/wangzhihao/.nvm/versions/node/v22.22.2/bin:/usr/bin:/bin:/usr/sbin:/sbin' pnpm install --frozen-lockfile
+    rtk proxy env PATH='/Users/wangzhihao/.nvm/versions/node/v24.18.0/bin:/Users/wangzhihao/.nvm/versions/node/v22.22.2/bin:/usr/bin:/bin:/usr/sbin:/sbin' pnpm check
+    rtk proxy env PATH='/Users/wangzhihao/.nvm/versions/node/v24.18.0/bin:/Users/wangzhihao/.nvm/versions/node/v22.22.2/bin:/usr/bin:/bin:/usr/sbin:/sbin' pnpm compatibility
 
 Run the secondary Node 22 matrix serially and record the actual patch version:
 
-    rtk proxy env PATH='/Users/wangzhihao/.nvm/versions/node/v22.22.2/bin:/Users/wangzhihao/Library/pnpm:/usr/bin:/bin:/usr/sbin:/sbin' node --version
-    rtk proxy env PATH='/Users/wangzhihao/.nvm/versions/node/v22.22.2/bin:/Users/wangzhihao/Library/pnpm:/usr/bin:/bin:/usr/sbin:/sbin' pnpm install --frozen-lockfile
-    rtk proxy env PATH='/Users/wangzhihao/.nvm/versions/node/v22.22.2/bin:/Users/wangzhihao/Library/pnpm:/usr/bin:/bin:/usr/sbin:/sbin' pnpm check
-    rtk proxy env PATH='/Users/wangzhihao/.nvm/versions/node/v22.22.2/bin:/Users/wangzhihao/Library/pnpm:/usr/bin:/bin:/usr/sbin:/sbin' pnpm compatibility
+    rtk proxy env PATH='/Users/wangzhihao/.nvm/versions/node/v22.22.2/bin:/usr/bin:/bin:/usr/sbin:/sbin' node --version
+    rtk proxy env CI=true PATH='/Users/wangzhihao/.nvm/versions/node/v22.22.2/bin:/usr/bin:/bin:/usr/sbin:/sbin' pnpm install --frozen-lockfile
+    rtk proxy env PATH='/Users/wangzhihao/.nvm/versions/node/v22.22.2/bin:/usr/bin:/bin:/usr/sbin:/sbin' pnpm check
+    rtk proxy env PATH='/Users/wangzhihao/.nvm/versions/node/v22.22.2/bin:/usr/bin:/bin:/usr/sbin:/sbin' pnpm compatibility
 
 Finish with scoped integrity checks:
 
@@ -360,12 +370,18 @@ Repository full-gate baseline recorded by the completed Stage 4 closeout before 
     Tests       264 passed | 1 skipped (265)
     Compatibility  4 files / 16 tests / 27 fixtures / 108 observations
 
-Replace the following placeholder with the actual final CLI transcript during implementation:
+Final built CLI transcript under Node 22.22.2 (the Node 24.18.0 matrix produced the same tested behavior):
 
-    <absolute fixture path>:HOST_LINE:HOST_COLUMN: error mermaid/syntax-error [approximate]: Mermaid syntax error: Parse error near diagram line DIAGRAM_LINE
-      HOST_LINE | <bounded host Note line>
-                | location is approximate; inspect this host line
-                | help: <bounded advisory help>
+    /Users/wangzhihao/Documents/playground/mermaid-diagram-validator/tests/fixtures/markdown/sequence-note-semicolon.md:20:49: error mermaid/syntax-error [approximate]: Mermaid syntax error: Parse error near diagram line 15
+      20 |     Note over B: valid history stays unchanged;<br/>damaged pairs are repaired locally
+         | location is approximate; inspect this host line
+         | help: In a Sequence Note, ';' before '<br/>' ends the Mermaid statement; replace it with other punctuation or an escaped representation.
+
+Final dual-runtime acceptance evidence:
+
+    Node 24.18.0  check: 31 passed files / 281 passed tests / 1 skipped file and test
+    Node 22.22.2  check: 31 passed files / 281 passed tests / 1 skipped file and test
+    Both runtimes compatibility: 4 passed files / 16 passed tests / 27 fixtures / 108 observations
 
 ## Interfaces and Dependencies
 
@@ -392,3 +408,5 @@ No package is added and no exact pin changes. Direct runtime dependencies remain
 ## Revision Note
 
 2026-07-30: Created this self-contained post-Stage-4 diagnostic-usability ExecPlan after reviewing the external wiki validation session and independently reproducing the official Mermaid rejection, source mapping, and misleading approximate-column presentation. The plan prioritizes a repository-local regression, visible precision, host context, coordinate wording, and conservative advisory help; explicitly rejects `engineLocation`, column correction, default summaries, new dependencies, automatic fixes, Stage 5 work, visual work, version changes, and Git publication actions. The planning review also required `ARCHITECTURE.md` to record the new root-validation helper while keeping every ownership rule and dependency edge unchanged, with no ADR.
+
+2026-07-30: Completed all three implementation milestones. Added the canonical regression and narrow syntax help, exposed honest bounded terminal and LSP diagnostics, documented the behavior and unchanged JSON/architecture contracts, installed and verified Node 24.18.0, passed both supported-runtime matrices and unchanged compatibility evidence, and closed the falsification review without an unresolved issue. The user separately authorized commit and push for this implementation task.

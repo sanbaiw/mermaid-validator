@@ -33,6 +33,16 @@ function severityFor(finding: Finding): DiagnosticSeverity {
   return DiagnosticSeverity.Information;
 }
 
+function messageFor(finding: Finding): string {
+  const precision = finding.locationPrecision === "approximate"
+    ? "[approximate location] "
+    : finding.locationPrecision === "document"
+      ? "[document-level location] "
+      : "";
+  const help = finding.help === undefined ? "" : `\nHelp: ${finding.help}`;
+  return `${precision}${finding.message}${help}`;
+}
+
 export function projectValidationResult(
   document: TextDocument,
   result: ValidationResult,
@@ -52,7 +62,7 @@ export function projectValidationResult(
         severity: severityFor(finding),
         code: finding.code,
         source: "mermaid-validator",
-        message: finding.message,
+        message: messageFor(finding),
       }),
     });
   });

@@ -17,6 +17,7 @@ import {
   type RuleRegistry,
 } from "./rules/index.js";
 import { sourceLocationToSpan } from "./source-offsets.js";
+import { helpForSyntaxError } from "./syntax-help.js";
 
 export interface ValidationDependencies {
   readonly checkSyntax: typeof checkCanonicalSyntax;
@@ -54,12 +55,18 @@ function findingFromSyntaxOutcome(source: string, outcome: SyntaxOutcome): Findi
   if (outcome.kind === "accepted") return undefined;
   if (outcome.kind === "syntax-error") {
     const span = outcome.location ? sourceLocationToSpan(source, outcome.location) : undefined;
+    const help = helpForSyntaxError({
+      source,
+      ...(outcome.diagramType === undefined ? {} : { diagramType: outcome.diagramType }),
+      ...(outcome.location?.line === undefined ? {} : { line: outcome.location.line }),
+    });
     return {
       code: "mermaid/syntax-error", severity: "error", message: outcome.message, source: "mermaid",
       ...(span === undefined ? {} : { span }),
       locationPrecision: span === undefined ? "document" : outcome.locationPrecision,
       ...(outcome.diagramType === undefined ? {} : { diagramType: outcome.diagramType }),
       engine: { name: "mermaid", version: outcome.engineVersion },
+      ...(help === undefined ? {} : { help }),
     };
   }
   if (outcome.kind === "unsupported-type") {

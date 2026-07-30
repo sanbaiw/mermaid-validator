@@ -80,12 +80,12 @@ describe("built CLI", () => {
   it("prints standalone and host-Markdown findings to stdout", async () => {
     const invalid = await run(["fixtures/compatibility/flowchart/invalid-edge.mmd"]);
     expect(invalid.status).toBe(1);
-    expect(invalid.stdout).toMatch(/invalid-edge\.mmd:\d+:\d+: error mermaid\/syntax-error:/);
+    expect(invalid.stdout).toMatch(/invalid-edge\.mmd:\d+:\d+: error mermaid\/syntax-error \[approximate\]:/);
     expect(invalid.stderr).toBe("");
 
     const embedded = await run([join(temporaryDirectory, "embedded-invalid.md")]);
     expect(embedded.status).toBe(1);
-    expect(embedded.stdout).toMatch(/embedded-invalid\.md:4:\d+: error mermaid\/syntax-error:/);
+    expect(embedded.stdout).toMatch(/embedded-invalid\.md:4:\d+: error mermaid\/syntax-error \[approximate\]:/);
     expect(embedded.stderr).toBe("");
   });
 
@@ -107,6 +107,51 @@ describe("built CLI", () => {
       ],
       summary: { documents: 2, diagrams: 1, findings: 1, errors: 1 },
     });
+  });
+
+  it("reports the Sequence Note regression with honest terminal and JSON diagnostics", async () => {
+    const path = "tests/fixtures/markdown/sequence-note-semicolon.md";
+    const terminal = await run([path]);
+    expect(terminal.status).toBe(1);
+    expect(terminal.stderr).toBe("");
+    expect(terminal.stdout).toMatch(
+      /sequence-note-semicolon\.md:\d+:\d+: error mermaid\/syntax-error \[approximate\]: Mermaid syntax error: Parse error near diagram line 15/,
+    );
+    expect(terminal.stdout).toContain(
+      "Note over B: valid history stays unchanged;<br/>damaged pairs are repaired locally",
+    );
+    expect(terminal.stdout).toContain("location is approximate; inspect this host line");
+    expect(terminal.stdout).toContain(
+      "help: In a Sequence Note, ';' before '<br/>' ends the Mermaid statement; replace it with other punctuation or an escaped representation.",
+    );
+    expect(terminal.stdout).not.toContain("^");
+
+    const json = await run(["--format", "json", path]);
+    expect(json.status).toBe(1);
+    expect(json.stderr).toBe("");
+    const payload = JSON.parse(json.stdout);
+    expect(payload).toMatchObject({
+      schemaVersion: 2,
+      complete: true,
+      valid: false,
+      documents: [{
+        languageId: "markdown",
+        diagramCount: 1,
+        findings: [{
+          code: "mermaid/syntax-error",
+          locationPrecision: "approximate",
+          diagramType: "sequence",
+          engine: { name: "mermaid", version: "11.16.0" },
+          help: "In a Sequence Note, ';' before '<br/>' ends the Mermaid statement; replace it with other punctuation or an escaped representation.",
+        }],
+      }],
+      summary: { documents: 1, diagrams: 1, findings: 1, errors: 1, inputErrors: 0 },
+    });
+    expect(payload.documents[0].findings[0].span).toMatchObject({
+      startOffset: expect.any(Number),
+      endOffset: expect.any(Number),
+    });
+    expect(json.stdout).not.toMatch(/engineLocation|debugDetail|"hash"|"stack"|"expected"/i);
   });
 
   it("discovers a repository by default and includes .github while honoring ignores", async () => {
