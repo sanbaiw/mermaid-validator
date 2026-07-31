@@ -171,7 +171,7 @@ describe("runCli", () => {
 
   it("handles version and invalid format before config or discovery", async () => {
     await expect(invoke({ argv: ["--version"], configFailure: true })).resolves.toMatchObject({
-      code: 0, stdout: "0.3.1\n", stderr: "", documents: [],
+      code: 0, stdout: "0.3.2\n", stderr: "", documents: [],
     });
     await expect(invoke({ argv: ["--format", "yaml"] })).resolves.toMatchObject({ code: 2, stdout: "" });
   });

@@ -73,4 +73,8 @@ jobs:
 
       - name: Publish to npm
         if: github.event_name == 'push'
-        run: npm publish "${PACKAGE_FILE}" --provenance --access public
+        env:
+          # npm trusted publishing remains OIDC-authenticated, but npm cannot
+          # publish Sigstore provenance for a private GitHub source repository.
+          NPM_CONFIG_PROVENANCE: "false"
+        run: npm publish "${PACKAGE_FILE}" --access public

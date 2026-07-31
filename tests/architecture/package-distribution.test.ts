@@ -69,7 +69,9 @@ describe("preview npm distribution", () => {
     const workflow = await readFile(resolve(".github/workflows/publish.yml"), "utf8");
     expect(workflow).toContain("id-token: write");
     expect(workflow).toContain("npm install -g npm@^11.5.1");
-    expect(workflow).toContain('npm publish "${PACKAGE_FILE}" --provenance --access public');
+    expect(workflow).toContain('NPM_CONFIG_PROVENANCE: "false"');
+    expect(workflow).toContain('npm publish "${PACKAGE_FILE}" --access public');
+    expect(workflow).not.toContain("--provenance");
     expect(workflow).toContain("actions/upload-artifact@v6");
     expect(workflow).toContain("if: github.event_name == 'push'");
     expect(workflow).not.toMatch(/NPM_TOKEN|NODE_AUTH_TOKEN|npm[_-]?token/i);

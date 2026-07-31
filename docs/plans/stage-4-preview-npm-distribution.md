@@ -8,7 +8,7 @@ This document is maintained in accordance with `PLANS.md`. It implements the use
 
 After this work, a user can install `mermaid-validator@0.3.0` with npm or pnpm and run `mermaid-validator` without cloning this repository. The package is a CLI-only preview: it does not carry the repository's language server, publishes no supported JavaScript or TypeScript import, does not add declarations, and does not claim the stable Stage 6 API contract.
 
-A pushed version tag such as `v0.3.1` starts `.github/workflows/publish.yml`. The workflow verifies that the tag and manifest version agree, runs the complete repository gate, builds one tarball, proves that the tarball installs and runs through both npm and pnpm, stores the tarball as a workflow artifact, and publishes that exact tarball to the public npm registry. Authentication uses npm trusted publishing through GitHub OpenID Connect, abbreviated OIDC, which means GitHub provides a short-lived identity token to npm rather than the repository storing a long-lived `NPM_TOKEN` secret.
+A pushed version tag such as `v0.3.2` starts `.github/workflows/publish.yml`. The workflow verifies that the tag and manifest version agree, runs the complete repository gate, builds one tarball, proves that the tarball installs and runs through both npm and pnpm, stores the tarball as a workflow artifact, and publishes that exact tarball to the public npm registry. Authentication uses npm trusted publishing through GitHub OpenID Connect, abbreviated OIDC, which means GitHub provides a short-lived identity token to npm rather than the repository storing a long-lived `NPM_TOKEN` secret.
 
 ## Progress
 
@@ -29,6 +29,9 @@ A pushed version tag such as `v0.3.1` starts `.github/workflows/publish.yml`. Th
 - [x] (2026-08-01) Extracted the CLI executable-entrypoint boundary from `origin/codex/package-private-cli` onto the public CLI-only package. Focused architecture, unit, integration, and package contracts passed 4 files/74 tests; `pnpm check` passed 32 files plus one opt-in skip and 287 tests plus one opt-in skip; the unchanged package smoke passed clean npm and pnpm consumer installation after registry access was allowed.
 - [x] (2026-08-01) Manually bootstrapped immutable npm version `0.3.0`, verified registry and installed-package behavior, and configured the npm trusted publisher for `sanbaiw/mermaid-validator`, workflow `publish.yml`, with only `npm publish` permission. The first tag-driven release is therefore `0.3.1`.
 - [x] (2026-08-01) Prepared `0.3.1` as the first trusted tag-driven release. `pnpm check` passed 32 files/287 tests with one opt-in file/test skipped; Compatibility Evidence passed 4 files/16 tests over 27 fixtures/108 observations; npm and pnpm package smoke passed; and the dry-run tarball contained only 66 allowlisted package, README, CLI, and Validation entries.
+- [x] (2026-08-01) Pushed `v0.3.1`; its workflow obtained the trusted-publisher OIDC identity and passed every build, quality, package-smoke, and artifact step, but npm rejected provenance with E422 because the GitHub source repository is private. The version was not published, and the pushed tag remains immutable historical failure evidence.
+- [x] (2026-08-01) Prepared `0.3.2` with private-source provenance explicitly disabled and OIDC trusted publishing unchanged. `pnpm check` passed 32 files/287 tests with one opt-in file/test skipped; Compatibility Evidence passed 4 files/16 tests over 27 fixtures/108 observations; npm and pnpm package smoke passed after a sandboxed npm install timeout was retried with registry access; and the dry-run tarball contained only 66 allowlisted entries.
+- [ ] Publish `0.3.2` from a new tag, then verify registry metadata and a clean registry installation.
 
 ## Surprises & Discoveries
 
@@ -52,6 +55,9 @@ A pushed version tag such as `v0.3.1` starts `.github/workflows/publish.yml`. Th
 
 - Observation: npm trusted publishing cannot bootstrap a package that does not yet exist in the registry.
   Evidence: npm's trusted-publisher prerequisites require write permission on an existing registry package. The workflow can be tokenless after the one-time first publication and trust binding, but it cannot create that trust relationship for a name that has never been published.
+
+- Observation: npm trusted publishing automatically attempts provenance for GitHub Actions, but npm provenance does not support a private GitHub source repository.
+  Evidence: The `v0.3.1` workflow reached the publish step with OIDC and created a Sigstore statement, then npm returned E422: `Unsupported GitHub Actions source repository visibility: "private"`. npm's trusted-publisher documentation requires `provenance=false` for this private-repository case.
 
 ## Decision Log
 
@@ -95,9 +101,13 @@ A pushed version tag such as `v0.3.1` starts `.github/workflows/publish.yml`. Th
   Rationale: Installed package-manager symlinks no longer require URL or filesystem identity detection. Unit tests import the side-effect-free adjacent module, and the architecture fitness check rejects source or test imports of every `package.json#bin` entrypoint as well as exports from those entrypoints.
   Date/Author: 2026-08-01 / User and Codex
 
-- Decision: Follow the `web-source-bundler` trusted-publisher workflow pattern and do not add an `NPM_TOKEN` fallback.
-  Rationale: The user explicitly requested trusted publishing. The workflow therefore grants `id-token: write`, installs an OIDC-capable npm CLI, uploads the exact tarball, and publishes it with provenance. A manual workflow dispatch stops after validation and artifact creation; only a pushed tag can publish.
+- Decision: Follow the `web-source-bundler` trusted-publisher workflow pattern and do not add an `NPM_TOKEN` fallback, but explicitly disable provenance while this GitHub source repository is private.
+  Rationale: The user explicitly requested trusted publishing. The workflow therefore grants `id-token: write`, installs an OIDC-capable npm CLI, and uploads the exact tarball. npm's OIDC authentication remains active with `NPM_CONFIG_PROVENANCE=false`; only the unsupported public-source attestation is disabled. A manual workflow dispatch stops after validation and artifact creation; only a pushed tag can publish.
   Date/Author: 2026-07-30 / Codex
+
+- Decision: Preserve the already-pushed failed `v0.3.1` tag and publish the workflow correction as `0.3.2`.
+  Rationale: Git tags and npm versions are release identities. A new patch version avoids force-moving shared release history, while the registry confirms that failed version `0.3.1` was never published.
+  Date/Author: 2026-08-01 / Codex
 
 - Decision: Do not invent an open-source license during packaging.
   Rationale: This repository has no license file or license field. Publishing bits and granting copyright permissions are different decisions; this task must not silently choose MIT or another license for the owner.
@@ -127,7 +137,7 @@ The baseline `package.json` was private and had no package content allowlist. np
 
 `tests/architecture/no-visual-dependencies.test.ts` currently asserts that the package is private. That test must change to retain its real responsibilities—exact dependency pins and the absence of visual dependencies—while a new `tests/architecture/package-distribution.test.ts` owns the public-preview manifest, workflow, version synchronization, and package allowlist contracts.
 
-`.github/workflows/ci.yml` already runs `pnpm check` on Node 22 and 24. The new `.github/workflows/publish.yml` is a release workflow, not a replacement for CI. It runs on pushed `v*` tags and on manual dispatch. Manual dispatch is verification-only; the actual publish step is conditioned on a tag push. The workflow uses GitHub-hosted Ubuntu, `actions/checkout@v5`, `pnpm/action-setup@v4`, `actions/setup-node@v5`, npm `^11.5.1`, `actions/upload-artifact@v6`, and `npm publish` with provenance, matching the user-selected reference repository's trusted-publisher shape.
+`.github/workflows/ci.yml` already runs `pnpm check` on Node 22 and 24. The new `.github/workflows/publish.yml` is a release workflow, not a replacement for CI. It runs on pushed `v*` tags and on manual dispatch. Manual dispatch is verification-only; the actual publish step is conditioned on a tag push. The workflow uses GitHub-hosted Ubuntu, `actions/checkout@v5`, `pnpm/action-setup@v4`, `actions/setup-node@v5`, npm `^11.5.1`, and `actions/upload-artifact@v6`. It retains the user-selected reference repository's OIDC trusted-publisher shape but sets `NPM_CONFIG_PROVENANCE=false` because this source repository is private.
 
 The current worktree contains a user-owned `README.md` addition for `docs/performance/` and an untracked `docs/performance/` directory. This plan preserves that content. README packaging edits are appended around the existing text rather than removing the performance reference.
 
@@ -196,7 +206,7 @@ Acceptance requires all of the following observable behavior.
 
 The manifest has no supported import entry. `exports` is exactly an empty object, there is no `main`, and no declaration files are shipped. The single `bin` path points to a file included in the tarball, preserves its Node shebang, exports no reusable API, and has no incoming source or test import. LSP-only packages are not published runtime dependencies.
 
-The publish workflow has a tag/version guard, frozen installation, full quality gate, exact tarball reuse, artifact upload, OIDC permission, and provenance publication. It has no token secret. A manual dispatch completes validation and uploads the artifact but skips `npm publish`; a pushed matching tag reaches the publish step after every prior step passes.
+The publish workflow has a tag/version guard, frozen installation, full quality gate, exact tarball reuse, artifact upload, and OIDC permission. It explicitly disables unsupported private-source provenance and has no token secret. A manual dispatch completes validation and uploads the artifact but skips `npm publish`; a pushed matching tag reaches the publish step after every prior step passes.
 
 Roadmap and architecture text consistently say that Stage 4 executable distribution is public preview while programmatic interfaces remain private through Stage 5. Stage 5 remains not started. Stage 6 still owns stable imports, declarations, compatibility/migration policy, SARIF/JUnit, MCP, and production hardening.
 
@@ -224,9 +234,9 @@ The user-selected trusted-publisher reference uses these load-bearing steps:
       id-token: write
 
     npm install -g npm@^11.5.1
-    npm publish "${PACKAGE_FILE}" --provenance --access public
+    NPM_CONFIG_PROVENANCE=false npm publish "${PACKAGE_FILE}" --access public
 
-This implementation retains those semantics while changing Bun-specific installation and packing to pnpm and making manual dispatch verification-only.
+This implementation retains OIDC trusted publishing while changing Bun-specific installation and packing to pnpm, making manual dispatch verification-only, and disabling the provenance feature that npm limits to public source repositories.
 
 ## Interfaces and Dependencies
 

@@ -4,7 +4,7 @@
 
 ## Release invariants
 
-The package version in `package.json`, the CLI version in `src/cli/run-cli.ts`, and the pushed Git tag must agree. For version `0.3.1`, the tag is `v0.3.1`. npm versions are immutable: if that version already exists, choose a new version and rerun every check rather than trying to overwrite it.
+The package version in `package.json`, the CLI version in `src/cli/run-cli.ts`, and the pushed Git tag must agree. For version `0.3.2`, the tag is `v0.3.2`. npm versions are immutable: if that version already exists or its tag has already been pushed, choose a new version and rerun every check rather than overwriting the version or moving the tag.
 
 The published artifact must be the tarball that passed installation smoke tests. `pnpm package:smoke` creates a temporary tarball by default, installs it through both npm and pnpm in separate temporary consumer projects, exercises the installed CLI version and validation paths, and deletes its temporary files. The publish workflow builds a retained tarball, passes its path to the same smoke program, uploads it as the `npm-package` workflow artifact, and publishes that exact file.
 
@@ -52,17 +52,17 @@ Review `pnpm pack --dry-run --json`. The tarball may contain only `package.json`
 
 For versions after the manual bootstrap, commit the release only when requested, create the matching `v<version>` tag, and push the commit and tag. A tag push runs `.github/workflows/publish.yml`; a manual workflow dispatch runs the same checks and uploads the tarball but skips the registry publish step.
 
-The workflow follows npm trusted publishing and contains no long-lived registry secret. Its publish job grants `id-token: write`, installs npm `^11.5.1`, and runs:
+The workflow follows npm trusted publishing and contains no long-lived registry secret. Its publish job grants `id-token: write` and installs npm `^11.5.1`. npm provenance requires a public source repository, so this private GitHub repository must explicitly disable automatic provenance while retaining OIDC authentication:
 
 ```sh
-npm publish "${PACKAGE_FILE}" --provenance --access public
+NPM_CONFIG_PROVENANCE=false npm publish "${PACKAGE_FILE}" --access public
 ```
 
 After the workflow succeeds, verify the registry metadata and an actual registry installation:
 
 ```sh
 pnpm view mermaid-validator version versions time dist.tarball --json
-pnpm dlx --package mermaid-validator@0.3.1 mermaid-validator --version
+pnpm dlx --package mermaid-validator@0.3.2 mermaid-validator --version
 ```
 
 Do not rerun a successful tag publication job merely to clear an unrelated warning: npm will reject an existing immutable version, and a release workflow is not a neutral diagnostic action.

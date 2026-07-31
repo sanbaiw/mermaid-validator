@@ -335,7 +335,7 @@ Release cut: `v0.3` CLI + LSP.
 
 ### Stage 4 preview distribution — installable CLI
 
-Status: Repository implementation completed on 2026-07-31; the one-time npm bootstrap, trusted-publisher binding, and first registry publication remain owner-operated external steps. This checkpoint packages the completed Stage 4 behavior; it does not start Stage 5.
+Status: CLI preview publication is active. The `0.3.0` bootstrap and npm trusted-publisher binding are complete; tag-driven releases remain OIDC-authenticated and explicitly disable provenance while the GitHub source repository is private. This checkpoint packages the completed Stage 4 behavior; it does not start Stage 5.
 
 Purpose: gather real-world CLI experience from a normal npm/pnpm installation before expanding validation semantics.
 
@@ -346,7 +346,7 @@ Work:
 - Keep `src/cli/main.ts` as a non-importable executable bootstrap and put reusable command behavior in `src/cli/run-cli.ts`, so package-manager symlinks require no entry-detection heuristic.
 - Deny programmatic imports with an empty package `exports` map; emit no declarations and make no JavaScript/TypeScript API stability promise.
 - Verify one real tarball through clean npm and pnpm consumer installs.
-- Add a tag/version-guarded GitHub Actions workflow using npm trusted publishing, provenance, and no long-lived npm token.
+- Add a tag/version-guarded GitHub Actions workflow using npm trusted publishing and no long-lived npm token. Explicitly disable provenance while the GitHub source repository is private because npm provenance requires public source.
 
 Exit criteria:
 
