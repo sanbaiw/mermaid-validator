@@ -31,7 +31,7 @@ A pushed version tag such as `v0.3.2` starts `.github/workflows/publish.yml`. Th
 - [x] (2026-08-01) Prepared `0.3.1` as the first trusted tag-driven release. `pnpm check` passed 32 files/287 tests with one opt-in file/test skipped; Compatibility Evidence passed 4 files/16 tests over 27 fixtures/108 observations; npm and pnpm package smoke passed; and the dry-run tarball contained only 66 allowlisted package, README, CLI, and Validation entries.
 - [x] (2026-08-01) Pushed `v0.3.1`; its workflow obtained the trusted-publisher OIDC identity and passed every build, quality, package-smoke, and artifact step, but npm rejected provenance with E422 because the GitHub source repository is private. The version was not published, and the pushed tag remains immutable historical failure evidence.
 - [x] (2026-08-01) Prepared `0.3.2` with private-source provenance explicitly disabled and OIDC trusted publishing unchanged. `pnpm check` passed 32 files/287 tests with one opt-in file/test skipped; Compatibility Evidence passed 4 files/16 tests over 27 fixtures/108 observations; npm and pnpm package smoke passed after a sandboxed npm install timeout was retried with registry access; and the dry-run tarball contained only 66 allowlisted entries.
-- [ ] Publish `0.3.2` from a new tag, then verify registry metadata and a clean registry installation.
+- [x] (2026-08-01) Published `0.3.2` from immutable tag `v0.3.2` through npm trusted publishing. Registry metadata made `0.3.2` latest at `2026-07-31T18:43:41.995Z`; a fresh `pnpm dlx` download printed `0.3.2` and validated the known-good minimal Flowchart fixture with exit 0.
 
 ## Surprises & Discoveries
 
@@ -128,6 +128,8 @@ The retained renamed artifact is `.release-artifacts/mermaid-validator-0.3.0.tgz
 On the final renamed tree, Node 22.20.0 passed `pnpm check` with 32 passing files plus one opt-in skipped file and 285 passing tests plus one skipped test in 204.01 seconds. Node 24.18.0 passed the same counts in 204.46 seconds. Both full gates reported the unchanged Compatibility Evidence summary of 27 fixtures and 108 observations. The focused package, JSON reporter, and LSP contracts passed 4 files/42 tests before the full matrix. `git diff --check` and the final scope review passed after this evidence update.
 
 The npm registry returned E404 for `mermaid-validator` on 2026-07-31 before the selected name was reserved. GitHub repository ID `1299911016` was renamed in place to `sanbaiw/mermaid-validator`, the local SSH `origin` targets that repository, and the reviewed tarball was manually published as immutable npm version `0.3.0`. Registry metadata and a real `pnpm dlx` installation passed, and npm now trusts GitHub Actions workflow `publish.yml` for `sanbaiw/mermaid-validator` with only `npm publish` permission. No `v0.3.0` tag was created; tag-driven publication begins with `v0.3.1`.
+
+The first tag-driven attempt, `v0.3.1`, passed every repository and artifact gate and reached npm with a valid OIDC identity, but npm rejected automatic provenance because the GitHub source repository is private. The workflow now sets `NPM_CONFIG_PROVENANCE=false` for the publish step without adding a token or weakening OIDC authentication. Immutable tag `v0.3.2` published successfully; registry metadata reports `0.3.2` as latest, and a fresh `pnpm dlx` consumer printed `0.3.2` and validated a known-good Flowchart with exit 0. The CLI-only preview is therefore available through normal npm and pnpm installation while the LSP remains checkout-only.
 
 ## Context and Orientation
 
