@@ -1,28 +1,44 @@
 # Mermaid Diagram Validator
 
-A private TypeScript/Node validator that uses exact-pinned official Mermaid as the canonical syntax authority. Stage 4 validates standalone Mermaid files and exact-lowercase `mermaid` fenced blocks in Markdown through both the repository-aware CLI and an unsaved-buffer language server, with configurable rules and bounded safe fixes.
+A TypeScript/Node validator that uses exact-pinned official Mermaid as the canonical syntax authority. The public `0.x` preview validates standalone Mermaid files and exact-lowercase `mermaid` fenced blocks in Markdown through the repository-aware CLI, with configurable rules and bounded safe fixes. The repository also contains an unsaved-buffer language server for development use.
 
 Rendering, geometry checks, layout comparison, model-based visual review, Semantic Facts, public plugin loading, and MCP remain deferred.
 
-## Requirements and build
+## Installation and requirements
 
 - Node.js `^22.13.0` or `>=24.0.0`; `.nvmrc` pins Node 24.18.0.
-- pnpm `10.30.1`.
 
-From this checkout:
+Install the CLI with npm or pnpm:
+
+```sh
+npm install --global mermaid-diagram-validator
+pnpm add --global mermaid-diagram-validator
+```
+
+Then run the executable from any repository:
+
+```sh
+mermaid-validator [--format terminal|json] [--config path] [--fix|--fix-dry-run] [paths...]
+```
+
+The package is a CLI-only executable preview and has no supported programmatic import. Its empty package `exports` map deliberately blocks JavaScript and TypeScript imports while the internal contracts continue to evolve through Stage 5. The language server is not included in the npm package; its publication is deferred.
+
+## Development build
+
+Development uses pnpm `10.30.1`. From this checkout:
 
 ```sh
 pnpm install --frozen-lockfile
 pnpm build
 ```
 
-The package is private and has no supported package-level programmatic import. Run the built entry directly:
+Run the locally built CLI directly:
 
 ```sh
 node dist/cli/main.js [--format terminal|json] [--config path] [--fix|--fix-dry-run] [paths...]
 ```
 
-The private built language server supports stdio only:
+The checkout-only language server supports stdio after a development build:
 
 ```sh
 node dist/lsp/main.js --stdio
@@ -96,4 +112,4 @@ For mixed results, precedence is `3 > 2 > 1 > 0`. `--version` prints `0.3.0` wit
 
 `pnpm check` runs strict typechecking, the build, repository hygiene, and all tests. `pnpm compatibility` reruns the independent Stage 0 evidence across 27 fixtures and 108 observations. The selected canonical profile and reuse boundary are recorded in [ADR 0001](./docs/adr/0001-validation-foundation.md).
 
-The package remains private and pre-release. JSON-v1 is historical only; JSON-v2 remains the CLI schema. The rule registration and LSP initialization surfaces remain repository-private through Stage 5. See [DRAFT-PLAN.md](./DRAFT-PLAN.md) for later stages and [ARCHITECTURE.md](./ARCHITECTURE.md) for module boundaries.
+The npm package is a pre-release CLI-only preview. JSON-v1 is historical only; JSON-v2 remains the CLI schema. Programmatic rule registration, Diagram Validation imports, and LSP distribution and initialization contracts remain unsupported package APIs through Stage 5. See the [release reference](./docs/reference/releasing.md), [DRAFT-PLAN.md](./DRAFT-PLAN.md) for later stages, and [ARCHITECTURE.md](./ARCHITECTURE.md) for module boundaries.

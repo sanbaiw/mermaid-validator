@@ -18,12 +18,10 @@ const forbiddenPackages = [
 describe("active non-visual dependency boundary", () => {
   it("uses exact direct pins and contains no visual product dependency", async () => {
     const packageJson = JSON.parse(await readFile(resolve("package.json"), "utf8")) as {
-      private?: boolean;
       dependencies?: Record<string, string>;
       devDependencies?: Record<string, string>;
       optionalDependencies?: Record<string, string>;
     };
-    expect(packageJson.private).toBe(true);
     expect(packageJson.optionalDependencies).toBeUndefined();
     const direct = { ...packageJson.dependencies, ...packageJson.devDependencies };
     for (const version of Object.values(direct)) expect(version).toMatch(/^\d+\.\d+\.\d+$/);

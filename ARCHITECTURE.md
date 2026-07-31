@@ -2,10 +2,10 @@
 
 - Status: Accepted repository and module architecture
 - Date: 2026-07-14
-- Updated: 2026-07-30
-- Stage 4 state: Complete
+- Updated: 2026-07-31
+- Stage 4 state: Complete; CLI-only preview package prepared, first registry publication pending
 - Scope: Active non-visual roadmap in `DRAFT-PLAN.md`
-- Package shape: One private TypeScript package through Stage 5; Stage 6 decides public exports and any justified split
+- Package shape: One public CLI-only preview package after Stage 4; Stage 6 decides supported programmatic exports and any justified split
 
 ## Purpose and authority
 
@@ -47,8 +47,8 @@ The following rules apply to every active stage.
 4. Compatibility Evidence may observe the product, but product modules never import Compatibility Evidence contracts or implementations.
 5. Upstream and experimental dependencies are exact-pinned and imported only by project-owned local adapters.
 6. Raw Mermaid, Merman, and mermaid-lint values never cross the Diagram Validation module interface.
-7. Through Stages 1–5, `index.ts` files define repository module seams only. The package remains private, emits no supported package-level programmatic interface, and may revise those module contracts as implementation evidence accumulates.
-8. Stage 6 decides which interfaces, if any, receive declaration output, `package.json` exports, migration policy, and public compatibility support.
+7. Through Stages 1–5, `index.ts` files define repository module seams only. After Stage 4 the CLI executable may ship as a public `0.x` preview, but the LSP remains checkout-only, the package emits no supported programmatic interface, and internal module contracts may still change as implementation evidence accumulates.
+8. The preview declares an empty `package.json` `exports` map to deny every programmatic import. Stage 6 decides which interfaces, if any, replace that deny-all map and receive declaration output, migration policy, and public compatibility support.
 9. The repository remains one package until real public-interface or release-cycle differences justify a split.
 10. Only modules required by the active stage may exist. Future empty directories are prohibited.
 11. Rendering, image, geometry, layout-comparison, and vision modules and dependencies remain prohibited until the deferred visual roadmap is explicitly reactivated.
@@ -270,7 +270,7 @@ Add a Semantic Facts capability inside `src/validation/`. The project-owned fact
 
 ### Stage 6: hardening and integrations
 
-Add `src/mcp/` as another delivery adapter over Diagram Validation. SARIF and JUnit projections may remain with the CLI if it remains their sole caller. A separate output module requires evidence of multiple callers or an independently stable interface; do not create one merely to mirror an aspirational diagram. Decide which programmatic interfaces have enough evidence to become supported package exports, then emit declarations, add explicit `package.json` exports, and attach migration policy and installed-consumer tests only to those interfaces.
+Add `src/mcp/` as another delivery adapter over Diagram Validation. SARIF and JUnit projections may remain with the CLI if it remains their sole caller. A separate output module requires evidence of multiple callers or an independently stable interface; do not create one merely to mirror an aspirational diagram. Decide which programmatic interfaces have enough evidence to become supported package exports, then replace the preview's empty deny-all exports map only for those interfaces, emit declarations, and attach migration policy and installed-consumer tests.
 
 ## Runtime data flow
 
@@ -462,7 +462,7 @@ The following structures are intentionally rejected for the current product:
 - top-level `domain/`, `application/`, and `infrastructure/` directories;
 - one top-level adapter directory containing unrelated Mermaid, CLI, LSP, Merman, and MCP implementations;
 - a generic parser interface that makes official Mermaid interchangeable with noncanonical engines;
-- package-level programmatic exports before Stage 6 accepts their compatibility and migration obligations;
+- package-level programmatic exports before Stage 6 accepts their compatibility and migration obligations; an empty deny-all `exports` map for the CLI-only preview is not a programmatic export;
 - a top-level reporter directory created before multiple real callers exist;
 - product imports from the Stage 0 spike or compatibility observation contracts;
 - a monorepo split based only on the future roadmap;
@@ -470,6 +470,18 @@ The following structures are intentionally rejected for the current product:
 
 These decisions favor locality: each domain capability owns its interface and implementation, while delivery and upstream details stay behind narrow seams.
 
+## Stage 4 preview distribution boundary
+
+ADR 0002 permits npm distribution of the completed Stage 4 CLI without changing the module graph. The package exposes exactly one executable shim, `mermaid-validator`. Its compiled runtime graph contains `dist/cli/` and `dist/validation/`; `dist/lsp/`, Compatibility Evidence, and every development-only subtree remain outside the tarball. The LSP remains available from a repository checkout and requires a later explicit decision before publication.
+
+This is an executable distribution boundary, not a new domain or programmatic module interface. `package.json` has no `main`, emits no declarations, and uses an empty `exports` map so package and deep-subpath imports fail. `src/validation/index.ts` remains a repository-private seam. Stage 6 must make a new explicit decision before any supported import can replace the empty map.
+
+Release tooling lives under top-level `scripts/` and `.github/workflows/`. It may build, inspect, install, and publish artifacts but is not product code and cannot be imported by `src/**`. The publish workflow uses a GitHub-hosted OIDC identity and npm trusted publishing; it contains no long-lived registry token. These operational files add no runtime dependency and do not change the allowed internal edges above.
+
 ## Stage 4 verification evidence
 
-Stage 4 is complete behind private version `0.3.0`. The architecture is unchanged: the durability fix is the test-orchestration policy `fileParallelism: false`, selected after the two-worker candidate produced a process-heavy CLI test timeout during repeated Node 24 proof. On the unchanged final surface, three consecutive default Node 24.18.0 full gates passed 29 files/264 tests with one opt-in skip in 273.31, 185.51, and 187.30 seconds; the Node 22.20.0 full gate passed the same counts in 229.84 seconds. Compatibility Evidence passed 4 files/16 tests over 27 fixtures/108 observations on both runtimes. The canonical 10-second startup/request deadline, Vitest's 20-second test timeout, real-process coverage, and no-retry policy remain unchanged. This closes the recorded local Stage 4 gate without claiming hosted-CI or cross-platform certification. The direct LSP pins remain `vscode-languageserver@10.1.0` and `vscode-languageserver-textdocument@1.0.12`, with `vscode-languageserver-protocol@3.18.2` owned transitively by the server package.
+Stage 4 correctness closed at repository-private version `0.3.0`; ADR 0002 subsequently activates distribution of the same CLI behavior as a CLI-only preview. The architecture is unchanged: the durability fix is the test-orchestration policy `fileParallelism: false`, selected after the two-worker candidate produced a process-heavy CLI test timeout during repeated Node 24 proof. On the unchanged final Stage 4 surface, three consecutive default Node 24.18.0 full gates passed 29 files/264 tests with one opt-in skip in 273.31, 185.51, and 187.30 seconds; the Node 22.20.0 full gate passed the same counts in 229.84 seconds. Compatibility Evidence passed 4 files/16 tests over 27 fixtures/108 observations on both runtimes. The canonical 10-second startup/request deadline, Vitest's 20-second test timeout, real-process coverage, and no-retry policy remain unchanged. This closes the recorded local Stage 4 gate without claiming hosted-CI or cross-platform certification. The checkout-only LSP retains exact development pins `vscode-languageserver@10.1.0` and `vscode-languageserver-textdocument@1.0.12`, with `vscode-languageserver-protocol@3.18.2` owned transitively by the server package.
+
+## Preview distribution verification evidence
+
+The first two-bin preview artifact was superseded when publication scope narrowed to CLI only on 2026-07-31. The final retained Node 24.18.0 tarball contains 64 entries, is 43,557 bytes compressed, and contains only package metadata, `README.md`, and compiled CLI/Diagram Validation files. That exact artifact passed clean npm and pnpm installs plus installed CLI version and valid-diagram checks. On the rebased diagnostic-hardening baseline, Node 22.20.0 and Node 24.18.0 each passed 32 test files and 285 tests, with one opt-in file/test skipped; Compatibility Evidence remained 4 files/16 tests over 27 fixtures/108 observations. The npm registry returned E404 for `mermaid-diagram-validator` on 2026-07-31. This is local packaging and name-availability evidence, not a completed npm publication or hosted Actions run.

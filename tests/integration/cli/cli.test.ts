@@ -257,13 +257,12 @@ describe("built CLI", () => {
     await expect(run([], empty)).resolves.toMatchObject({ status: 2, stdout: "" });
   });
 
-  it("preserves the shebang and package bin mapping", async () => {
+  it("preserves executable shebangs and publishes only the CLI bin mapping", async () => {
     expect((await readFile(entry, "utf8")).startsWith("#!/usr/bin/env node\n")).toBe(true);
     expect((await readFile(resolve("dist/lsp/main.js"), "utf8")).startsWith("#!/usr/bin/env node\n")).toBe(true);
     const manifest = JSON.parse(await readFile("package.json", "utf8")) as { bin?: Record<string, string> };
     expect(manifest.bin).toEqual({
       "mermaid-validator": "./dist/cli/main.js",
-      "mermaid-validator-language-server": "./dist/lsp/main.js",
     });
   });
 });

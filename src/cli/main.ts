@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import { randomUUID } from "node:crypto";
+import { realpathSync } from "node:fs";
 import { open, readFile, rename, stat, unlink } from "node:fs/promises";
 import { basename, dirname, extname, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
@@ -269,6 +270,14 @@ export async function runCli(
 }
 
 const entryPath = process.argv[1];
-if (entryPath && import.meta.url === pathToFileURL(resolve(entryPath)).href) {
+let directEntryUrl: string | undefined;
+if (entryPath) {
+  try {
+    directEntryUrl = pathToFileURL(realpathSync(resolve(entryPath))).href;
+  } catch {
+    directEntryUrl = pathToFileURL(resolve(entryPath)).href;
+  }
+}
+if (import.meta.url === directEntryUrl) {
   process.exitCode = await runCli(process.argv.slice(2));
 }

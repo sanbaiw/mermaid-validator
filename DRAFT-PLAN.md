@@ -1,10 +1,10 @@
 # Mermaid Diagram Validator — Implementation Plan
 
-- Status: Stages 0–4 complete; Stage 5 not started
-- Updated: 2026-07-30
+- Status: Stages 0–4 complete; Stage 4 preview package prepared locally, first registry publication pending; Stage 5 not started
+- Updated: 2026-07-31
 - Runtime: TypeScript on Node.js
 - Package manager: pnpm
-- Repository shape: one private package through Stages 1–5; Stage 6 decides which programmatic interfaces become public
+- Repository shape: one CLI-only public preview package after Stage 4; Stage 6 decides which programmatic interfaces become public
 - Active scope: syntax, source mapping, custom rules, semantic rules, CLI/JSON, LSP, and CI integrations
 - Deferred scope: rendering, geometry analysis, layout comparison, screenshots, and model-based visual review
 
@@ -69,7 +69,8 @@ Visual work is recorded in a separate deferred roadmap in Section 8. It adds no 
 | D010 | Defer every visual feature. | The agreed product focus is compiler-like validation and programmable lint rules. Rendering, geometry, and vision do not block that outcome. |
 | D011 | Do not adopt `@mermaid-js/parser` as the sole AST layer. | Its public coverage is not sufficient for all five target diagram families. |
 | D012 | Keep Mermaid CLI outside the active stack. | It is unnecessary for the non-visual product. If visual work is reactivated, it may be used only as a development compatibility oracle because its Node API is not a product runtime contract. |
-| D013 | Keep programmatic interfaces private through Stages 1–5. | Early stages need fast iteration across validation, rules, facts, and delivery adapters without npm compatibility commitments. Stage-local `index.ts` files are repository module seams, not package exports; Stage 6 decides which interfaces receive declarations, package exports, migration policy, and public support. |
+| D013 | Keep programmatic interfaces private through Stages 1–5. | Early stages need fast iteration across validation, rules, facts, and delivery adapters without JavaScript/TypeScript API compatibility commitments. Stage-local `index.ts` files are repository module seams, not package exports; Stage 6 decides which interfaces receive declarations, package exports, migration policy, and public support. |
+| D014 | Allow a CLI-only npm preview after Stage 4. | Executable distribution enables real-world feedback without stabilizing internal imports. The package exposes only the `mermaid-validator` bin, denies every programmatic import with an empty `exports` map, stays on `0.x`, and uses trusted publishing as recorded in ADR 0002. LSP publication is deferred. |
 
 Stage 0 validates the ecosystem assumptions behind D001–D003 and records any necessary adjustment in an ADR. The product and scope decisions remain unchanged.
 
@@ -209,7 +210,7 @@ Do not use `optionalDependencies` to smuggle deferred or experimental integratio
 
 ## 6. Active delivery stages
 
-The `v0.1` through `v0.4` release cuts below are internal version milestones, not npm publication commitments. The package remains private and exposes no supported package-level programmatic entry point through Stage 5. Stage 6 owns the decision to publish and stabilize any external interface.
+The `v0.1` through `v0.4` release cuts below began as internal milestones. ADR 0002 activates a narrow exception after Stage 4: the existing CLI executable may be published as a `0.x` npm preview, while the LSP stays checkout-only and every programmatic package import remains blocked through Stage 5. Stage 6 still owns stable programmatic interfaces and the broader production-ready release contract.
 
 ### Stage 0 — Compatibility and reuse spike
 
@@ -332,6 +333,29 @@ Exit criteria:
 
 Release cut: `v0.3` CLI + LSP.
 
+### Stage 4 preview distribution — installable CLI
+
+Status: Repository implementation completed on 2026-07-31; the one-time npm bootstrap, trusted-publisher binding, and first registry publication remain owner-operated external steps. This checkpoint packages the completed Stage 4 behavior; it does not start Stage 5.
+
+Purpose: gather real-world CLI experience from a normal npm/pnpm installation before expanding validation semantics.
+
+Work:
+
+- Publish `mermaid-diagram-validator@0.3.0` as a public `0.x` preview after a final name-availability check.
+- Ship only the `mermaid-validator` executable surface and its required compiled runtime graph; keep LSP publication deferred.
+- Deny programmatic imports with an empty package `exports` map; emit no declarations and make no JavaScript/TypeScript API stability promise.
+- Verify one real tarball through clean npm and pnpm consumer installs.
+- Add a tag/version-guarded GitHub Actions workflow using npm trusted publishing, provenance, and no long-lived npm token.
+
+Exit criteria:
+
+- `npm install` and `pnpm add` from the real tarball produce a working CLI shim; the CLI version and valid-diagram paths pass.
+- The tarball excludes source, tests, fixtures, Compatibility Evidence, plans, workflows, and development tooling.
+- A matching `v*` tag publishes only after the full quality gate and installed-package smoke checks pass; manual dispatch verifies without publishing.
+- Roadmap and architecture documentation retain Stage 5 and Stage 6 boundaries.
+
+Preview cut: `v0.3.0` installable CLI only; neither LSP distribution nor a stable programmatic API.
+
 ### Stage 5 — Structured facts and semantic rules
 
 Purpose: add higher-value rules without owning a complete Mermaid grammar.
@@ -378,12 +402,12 @@ Work:
 - Publish a Mermaid compatibility matrix and upgrade procedure.
 - Add process-level time/memory limits, cache policy, security review, and privacy documentation.
 - Stabilize config, rule, JSON, plugin, and LSP contracts.
-- Decide which programmatic interfaces become supported package exports; emit declarations and add `package.json` exports only for those accepted interfaces.
+- Decide which programmatic interfaces become supported package exports; replace the preview's empty deny-all `package.json` exports map only for accepted interfaces, emit declarations, and add installed-consumer tests.
 - Split packages only if actual release-cycle or dependency boundaries now require it.
 
 Exit criteria:
 
-- A clean installed package exposes a working `mermaid-validator` command, and installed CLI/LSP smoke tests pass on supported platforms.
+- The preview package is promoted to a production-ready installed distribution, with CLI/LSP smoke tests passing on supported platforms.
 - The compatibility corpus passes against the pinned Mermaid profile.
 - Upgrade tests show how diagnostics change across Mermaid versions.
 - Public APIs have migration and deprecation policies.
