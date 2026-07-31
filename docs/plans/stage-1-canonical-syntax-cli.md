@@ -335,7 +335,7 @@ Create `src/cli/json-v1-output.ts`. It returns one trailing-newline-terminated J
     {
       "schemaVersion": 1,
       "tool": {
-        "name": "mermaid-diagram-validator",
+        "name": "mermaid-validator",
         "version": "0.1.0"
       },
       "document": {

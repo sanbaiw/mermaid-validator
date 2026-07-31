@@ -1,4 +1,4 @@
-# Mermaid Diagram Validator Architecture
+# Mermaid Validator Architecture
 
 - Status: Accepted repository and module architecture
 - Date: 2026-07-14
@@ -9,7 +9,7 @@
 
 ## Purpose and authority
 
-This document defines the repository structure, module responsibilities, dependency direction, and import rules for the Mermaid Diagram Validator. Implementation plans must use it when deciding where code belongs and which modules may depend on each other.
+This document defines the repository structure, module responsibilities, dependency direction, and import rules for Mermaid Validator. Implementation plans must use it when deciding where code belongs and which modules may depend on each other.
 
 `DRAFT-PLAN.md` controls product scope, delivery stages, and stage exit criteria. This document controls module structure and dependency direction. Accepted ADRs control the decisions they record, including the canonical Mermaid profile in `docs/adr/0001-validation-foundation.md`. An ExecPlan must reference this document and repeat the rules relevant to its stage so that the ExecPlan remains self-contained as required by `PLANS.md`.
 
@@ -484,4 +484,4 @@ Stage 4 correctness closed at repository-private version `0.3.0`; ADR 0002 subse
 
 ## Preview distribution verification evidence
 
-The first two-bin preview artifact was superseded when publication scope narrowed to CLI only on 2026-07-31. The final retained Node 24.18.0 tarball contains 64 entries, is 43,557 bytes compressed, and contains only package metadata, `README.md`, and compiled CLI/Diagram Validation files. That exact artifact passed clean npm and pnpm installs plus installed CLI version and valid-diagram checks. On the rebased diagnostic-hardening baseline, Node 22.20.0 and Node 24.18.0 each passed 32 test files and 285 tests, with one opt-in file/test skipped; Compatibility Evidence remained 4 files/16 tests over 27 fixtures/108 observations. The npm registry returned E404 for `mermaid-diagram-validator` on 2026-07-31. This is local packaging and name-availability evidence, not a completed npm publication or hosted Actions run.
+The earlier preview artifacts were superseded before publication. The accepted npm package, CLI command, product-reported tool identity, LSP server identity, and GitHub repository name are all `mermaid-validator`; current renamed-artifact evidence is recorded in the distribution ExecPlan. On the rebased diagnostic-hardening baseline before the naming-only follow-up, Node 22.20.0 and Node 24.18.0 each passed 32 test files and 285 tests, with one opt-in file/test skipped; Compatibility Evidence remained 4 files/16 tests over 27 fixtures/108 observations. The npm registry returned E404 for `mermaid-validator` on 2026-07-31. This is local packaging and name-availability evidence, not a completed npm publication or hosted Actions run.

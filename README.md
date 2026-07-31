@@ -1,4 +1,4 @@
-# Mermaid Diagram Validator
+# Mermaid Validator
 
 A TypeScript/Node validator that uses exact-pinned official Mermaid as the canonical syntax authority. The public `0.x` preview validates standalone Mermaid files and exact-lowercase `mermaid` fenced blocks in Markdown through the repository-aware CLI, with configurable rules and bounded safe fixes. The repository also contains an unsaved-buffer language server for development use.
 
@@ -11,8 +11,8 @@ Rendering, geometry checks, layout comparison, model-based visual review, Semant
 Install the CLI with npm or pnpm:
 
 ```sh
-npm install --global mermaid-diagram-validator
-pnpm add --global mermaid-diagram-validator
+npm install --global mermaid-validator
+pnpm add --global mermaid-validator
 ```
 
 Then run the executable from any repository:

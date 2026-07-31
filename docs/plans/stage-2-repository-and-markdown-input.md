@@ -275,7 +275,7 @@ Replace `src/cli/json-v1-output.ts` with `src/cli/json-v2-output.ts` and add `do
     {
       "schemaVersion": 2,
       "tool": {
-        "name": "mermaid-diagram-validator",
+        "name": "mermaid-validator",
         "version": "0.1.0"
       },
       "complete": true,
@@ -655,7 +655,7 @@ If sharing the private `ValidatedDocument` type requires a CLI-local `contracts.
 The JSON-v2 collection contract is:
 
 - `schemaVersion` is always integer `2`.
-- `tool.name` is `mermaid-diagram-validator`; `tool.version` remains `0.1.0` during Stage 2.
+- `tool.name` is `mermaid-validator`; `tool.version` remains `0.1.0` during Stage 2.
 - `complete` is true exactly when `inputErrors` is empty.
 - `valid` is true exactly when `complete` is true and every emitted document is valid.
 - `inputErrors` is sorted by normalized absolute `path`; each entry has stable code `input/read-failed`, bounded message `Unable to read input file`, and no raw Node error.

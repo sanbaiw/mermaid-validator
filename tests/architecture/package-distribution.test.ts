@@ -25,7 +25,7 @@ async function manifest(): Promise<PackageManifest> {
 describe("preview npm distribution", () => {
   it("publishes only executable adapters and denies programmatic imports", async () => {
     const packageJson = await manifest();
-    expect(packageJson.name).toBe("mermaid-diagram-validator");
+    expect(packageJson.name).toBe("mermaid-validator");
     expect(packageJson.private).toBe(false);
     expect(packageJson.main).toBeUndefined();
     expect(packageJson.types).toBeUndefined();
@@ -50,7 +50,7 @@ describe("preview npm distribution", () => {
     const packageJson = await manifest();
     expect(packageJson.repository).toEqual({
       type: "git",
-      url: "git+https://github.com/sanbaiw/mermaid-diagram-validator.git",
+      url: "git+https://github.com/sanbaiw/mermaid-validator.git",
     });
     expect(packageJson.publishConfig).toEqual({ access: "public" });
     expect(packageJson.scripts?.clean).toBe("node scripts/clean-dist.mjs");

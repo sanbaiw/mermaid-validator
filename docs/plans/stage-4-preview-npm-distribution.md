@@ -6,7 +6,7 @@ This document is maintained in accordance with `PLANS.md`. It implements the use
 
 ## Purpose / Big Picture
 
-After this work, a user can install `mermaid-diagram-validator@0.3.0` with npm or pnpm and run `mermaid-validator` without cloning this repository. The package is a CLI-only preview: it does not carry the repository's language server, publishes no supported JavaScript or TypeScript import, does not add declarations, and does not claim the stable Stage 6 API contract.
+After this work, a user can install `mermaid-validator@0.3.0` with npm or pnpm and run `mermaid-validator` without cloning this repository. The package is a CLI-only preview: it does not carry the repository's language server, publishes no supported JavaScript or TypeScript import, does not add declarations, and does not claim the stable Stage 6 API contract.
 
 A pushed version tag such as `v0.3.0` starts `.github/workflows/publish.yml`. The workflow verifies that the tag and manifest version agree, runs the complete repository gate, builds one tarball, proves that the tarball installs and runs through both npm and pnpm, stores the tarball as a workflow artifact, and publishes that exact tarball to the public npm registry. Authentication uses npm trusted publishing through GitHub OpenID Connect, abbreviated OIDC, which means GitHub provides a short-lived identity token to npm rather than the repository storing a long-lived `NPM_TOKEN` secret.
 
@@ -24,6 +24,8 @@ A pushed version tag such as `v0.3.0` starts `.github/workflows/publish.yml`. Th
 - [x] (2026-07-31) Rebased `main` onto `origin/codex/stage-4-diagnostic-usability-hardening` before continuing package work, with the packaging work and unrelated user files restored without conflicts.
 - [x] (2026-07-31) Narrowed the npm surface to the single `mermaid-validator` bin, excluded `dist/lsp/`, and moved LSP-only packages to exact-pinned development dependencies while preserving repository LSP build and test coverage.
 - [x] (2026-07-31) Rebuilt the CLI-only tarball and passed focused contracts, npm/pnpm installed-consumer proof, Node 22 and Node 24 full gates, compatibility evidence, and package dry-run inspection on the rebased baseline.
+- [x] (2026-07-31) Verified that the shorter unscoped npm name `mermaid-validator` returned E404, then adopted it as the single public package, CLI, JSON tool, LSP server, and GitHub repository name at the user's direction.
+- [x] (2026-07-31) Revalidated the renamed package, renamed the GitHub repository to `sanbaiw/mermaid-validator`, updated the local `origin` URL, and created a dedicated rename commit without pushing the outgoing commits.
 
 ## Surprises & Discoveries
 
@@ -40,7 +42,7 @@ A pushed version tag such as `v0.3.0` starts `.github/workflows/publish.yml`. Th
   Evidence: A clean npm tarball install succeeded, but `node_modules/.bin/mermaid-validator --version` exited 0 with empty stdout because `process.argv[1]` named the symlink while `import.meta.url` named its real target. Resolving the entry through `realpathSync()` before comparison makes installed shims call `runCli()` while preserving the direct built-entry path.
 
 - Observation: pnpm preserves the explicit `--` separator when forwarding arguments to this package script.
-  Evidence: The workflow-shaped command `pnpm package:smoke -- .release-artifacts/mermaid-diagram-validator-0.3.0.tgz` invoked Node as `package-smoke.mjs -- <tarball>`. The script now accepts both that form and a direct single tarball argument, while rejecting extra arguments.
+  Evidence: The workflow-shaped command `pnpm package:smoke -- .release-artifacts/mermaid-validator-0.3.0.tgz` invokes Node as `package-smoke.mjs -- <tarball>`. The script accepts both that form and a direct single tarball argument, while rejecting extra arguments.
 
 - Observation: The accepted roadmap deferred installed-package support and npm publication to Stage 6, even though the Stage 4 CLI is already useful for real-world feedback.
   Evidence: Before this checkpoint, `DRAFT-PLAN.md` said the package remained private through Stage 5 and made installed executable support a Stage 6 exit criterion; the baseline `package.json` set `private: true`.
@@ -54,12 +56,16 @@ A pushed version tag such as `v0.3.0` starts `.github/workflows/publish.yml`. Th
   Rationale: Distribution is requested now to gather real usage feedback, but Semantic Facts are not part of this task and stable programmatic APIs, SARIF/JUnit, MCP, security hardening, and migration policy remain future Stage 6 work.
   Date/Author: 2026-07-30 / Codex
 
-- Decision: Publish the existing unscoped name `mermaid-diagram-validator` at version `0.3.0`, subject to a final registry lookup before the first publication.
-  Rationale: ADR 0001 and the current manifest already selected this name, and changing to a scope would be a separate product naming decision. Registry absence is not a reservation.
+- Decision: Initial package-name decision, superseded on 2026-07-31.
+  Rationale: The longer working name was available, but the user chose the shorter `mermaid-validator` identity after comparing alternatives.
   Date/Author: 2026-07-30 / Codex
 
+- Decision: Use `mermaid-validator` for every public identity: npm package, CLI binary, JSON `tool.name`, LSP `serverInfo.name`, and GitHub repository.
+  Rationale: A single short name is easier to remember and avoids a package/repository/tool naming matrix. The local checkout directory keeps its existing filesystem path so the active Codex workspace is not invalidated.
+  Date/Author: 2026-07-31 / User and Codex
+
 - Decision: Initial two-bin distribution decision, superseded on 2026-07-31.
-  Rationale: Both delivery adapters are complete at Stage 4, so the first package draft included both. The user subsequently narrowed the package to CLI only; the LSP remains checkout-only. The empty `exports` object continues to deny `import "mermaid-diagram-validator"` and deep subpath imports.
+  Rationale: Both delivery adapters are complete at Stage 4, so the first package draft included both. The user subsequently narrowed the package to CLI only; the LSP remains checkout-only. The empty `exports` object continues to deny `import "mermaid-validator"` and deep subpath imports.
   Date/Author: 2026-07-30 / Codex
 
 - Decision: Publish exactly one bin, `mermaid-validator`, and allow only `dist/cli/`, `dist/validation/`, and `README.md` in the tarball, in addition to metadata files npm always includes.
@@ -69,7 +75,6 @@ A pushed version tag such as `v0.3.0` starts `.github/workflows/publish.yml`. Th
 - Decision: Defer LSP publication without removing or weakening the repository LSP.
   Rationale: Package distribution scope and product source scope are separate. The current checkout continues to build and test `src/lsp/**`; publishing its executable requires a later explicit decision and installed-consumer contract.
   Date/Author: 2026-07-31 / Codex
-  Date/Author: 2026-07-30 / Codex
 
 - Decision: Make every normal build clean the generated `dist/` directory before invoking TypeScript.
   Rationale: Packaging only selected `dist/` subtrees still leaks stale files if deleted source outputs survive. `scripts/clean-dist.mjs` removes the one ignored generated directory by an exact resolved path, and `pnpm build` immediately recreates it.
@@ -91,19 +96,21 @@ A pushed version tag such as `v0.3.0` starts `.github/workflows/publish.yml`. Th
   Rationale: This repository has no license file or license field. Publishing bits and granting copyright permissions are different decisions; this task must not silently choose MIT or another license for the owner.
   Date/Author: 2026-07-30 / Codex
 
-- Decision: Do not commit, tag, push, bootstrap the npm package, or alter npm/GitHub settings in this implementation turn.
-  Rationale: The repository instructions prohibit commits unless asked. Those external state changes also require the owner's npm authentication and an explicit publication decision after reviewing the tarball.
+- Decision: During the initial packaging implementation, do not commit, tag, push, bootstrap the npm package, or alter npm/GitHub settings; this was later superseded only for the commit and repository rename when the user explicitly requested them.
+  Rationale: The repository instructions prohibit commits unless asked. Publication, tagging, and trusted-publisher binding still require separate explicit execution after reviewing the final tarball.
   Date/Author: 2026-07-30 / Codex
 
 ## Outcomes & Retrospective
 
 The initial two-bin artifact contained 72 entries, was 47,666 compressed bytes and 220,033 unpacked bytes, and passed npm/pnpm installation under Node 22.20.0 and Node 24.18.0. It is historical evidence only: the user narrowed publication to CLI only after the diagnostic-hardening rebase, so those artifact sizes, installed-LSP checks, and pre-rebase test counts are superseded.
 
-The final retained CLI-only artifact is `.release-artifacts/mermaid-diagram-validator-0.3.0.tgz`, built under Node 24.18.0. It contains 64 entries and is 43,557 bytes compressed. npm's independent dry-run reports 193,454 unpacked bytes. Every entry is `package.json`, `README.md`, or compiled output under `dist/cli/` and `dist/validation/`; there is no LSP output, source, test, fixture, workflow, plan, or Compatibility Evidence. That exact tarball passed clean npm and pnpm consumer installs under Node 24.18.0; both installed shims printed version `0.3.0` and validated a known-good `flowchart LR` document with status 0.
+The pre-rename CLI-only artifact was built under Node 24.18.0. It contained 64 entries and was 43,557 bytes compressed; npm's independent dry-run reported 193,454 unpacked bytes. Every entry was `package.json`, `README.md`, or compiled output under `dist/cli/` and `dist/validation/`; there was no LSP output, source, test, fixture, workflow, plan, or Compatibility Evidence. That artifact passed clean npm and pnpm consumer installs under Node 24.18.0, but it is superseded before publication.
 
-After clearing mistakenly concurrent local test sessions and rerunning serially, Node 22.20.0 passed `pnpm check` with 32 passing files plus one opt-in skipped file and 285 passing tests plus one skipped test in 124.33 seconds. Node 24.18.0 passed the same counts in 140.32 seconds. Both full gates reported the unchanged Compatibility Evidence summary of 27 fixtures and 108 observations; the focused compatibility command also passed 4 files/16 tests on both runtimes. Focused package, dependency, no-visual-dependency, and CLI contracts passed before the full matrix. `git diff --check` and the final scope review passed after this evidence update.
+The retained renamed artifact is `.release-artifacts/mermaid-validator-0.3.0.tgz`, built under Node 24.18.0. It contains the same 64-entry CLI-only graph and is 43,543 bytes compressed. The exact tarball passed clean npm and pnpm consumer installs; both installed `mermaid-validator` shims printed version `0.3.0` and validated a known-good `flowchart LR` document with status 0. The first sandboxed consumer proof reached its fixed 180-second npm network timeout; the unchanged command passed once registry access was allowed.
 
-The npm registry returned E404 for `mermaid-diagram-validator` on 2026-07-31, so the name appeared available at verification time but remains unreserved. No commit, tag, push, GitHub setting change, npm publication, or trusted-publisher binding was performed. The owner must review and push the workflow without a tag, manually bootstrap the first immutable package version, then configure npm trusted publishing for `sanbaiw/mermaid-diagram-validator` and `publish.yml`. If bootstrap publishes `0.3.0`, do not push `v0.3.0`; begin tag-driven trusted publication with a later version such as `0.3.1`.
+On the final renamed tree, Node 22.20.0 passed `pnpm check` with 32 passing files plus one opt-in skipped file and 285 passing tests plus one skipped test in 204.01 seconds. Node 24.18.0 passed the same counts in 204.46 seconds. Both full gates reported the unchanged Compatibility Evidence summary of 27 fixtures and 108 observations. The focused package, JSON reporter, and LSP contracts passed 4 files/42 tests before the full matrix. `git diff --check` and the final scope review passed after this evidence update.
+
+The npm registry returned E404 for `mermaid-validator` on 2026-07-31, so the selected name appeared available at verification time but remains unreserved. GitHub repository ID `1299911016` was renamed in place from its working name to `sanbaiw/mermaid-validator`, and the local SSH `origin` now targets the renamed repository. No tag, push, npm publication, or trusted-publisher binding has been performed. The owner must review and push the workflow without a tag, manually bootstrap the first immutable package version, then configure npm trusted publishing for `sanbaiw/mermaid-validator` and `publish.yml`. If bootstrap publishes `0.3.0`, do not push `v0.3.0`; begin tag-driven trusted publication with a later version such as `0.3.1`.
 
 ## Context and Orientation
 
@@ -137,7 +144,7 @@ Add `scripts/package-smoke.mjs`. With no argument, it creates a temporary direct
 
 Add `.github/workflows/publish.yml` using the trusted-publisher pattern described above. It verifies pushed tags against `package.json`, installs from the frozen lockfile, runs `pnpm check`, creates one tarball under `.release-artifacts/`, runs the package smoke program against that tarball, uploads it, and publishes only for a tag push. It contains `id-token: write` and no `NODE_AUTH_TOKEN`, `NPM_TOKEN`, or npm secret reference.
 
-Update `README.md` with npm and pnpm installation commands, installed CLI examples, the `0.x` preview and no-programmatic-import boundary, and a link to a new `docs/reference/releasing.md`. The release reference explains the version/tag invariant, exact trusted-publisher identity (`sanbaiw/mermaid-diagram-validator` and `publish.yml`), the one-time first-publication prerequisite, registry verification, and installed-package verification. It must be explicit that a tag is not pushed until the package exists and the trusted publisher has been configured, unless the owner intentionally performs the documented one-time manual bootstrap.
+Update `README.md` with npm and pnpm installation commands, installed CLI examples, the `0.x` preview and no-programmatic-import boundary, and a link to a new `docs/reference/releasing.md`. The release reference explains the version/tag invariant, exact trusted-publisher identity (`sanbaiw/mermaid-validator` and `publish.yml`), the one-time first-publication prerequisite, registry verification, and installed-package verification. It must be explicit that a tag is not pushed until the package exists and the trusted publisher has been configured, unless the owner intentionally performs the documented one-time manual bootstrap.
 
 Finally run focused tests, package dry-run inspection, real npm and pnpm installed-package smoke, the complete `pnpm check` and `pnpm compatibility` gates on Node 22.20.0 and Node 24.18.0, `git diff --check`, and a final read-only review of all changed files against this plan. Record actual evidence in this plan and do not publish or commit.
 
@@ -159,7 +166,7 @@ Run the installed-package proof:
 
 It must end with a line equivalent to:
 
-    Package smoke passed for npm and pnpm: mermaid-diagram-validator@0.3.0
+    Package smoke passed for npm and pnpm: mermaid-validator@0.3.0
 
 Run the full gates under both established runtimes:
 
@@ -192,13 +199,13 @@ Manifest, test, workflow, ADR, and documentation edits are ordinary patch-based 
 
 If an npm or pnpm consumer installation fails because registry access is unavailable, retain the successful tarball-content checks, rerun with network access, and do not claim installed-package acceptance until both managers pass. If the package name becomes occupied, stop before publication and choose a new name explicitly; do not silently switch to a scope. If a version already exists, bump the manifest and published CLI version constant together, rerun the entire validation set, and create a matching new tag because npm versions are immutable.
 
-The first publication is special. A trusted publisher cannot be attached until the package exists. The owner must first review and manually publish one verified tarball using an authenticated npm session with two-factor authentication, then configure the package's trusted publisher for GitHub repository `sanbaiw/mermaid-diagram-validator`, workflow filename `publish.yml`, and publish permission. Only subsequent matching tags use the tokenless workflow. Do not add a temporary repository token fallback.
+The first publication is special. A trusted publisher cannot be attached until the package exists. The owner must first review and manually publish one verified tarball using an authenticated npm session with two-factor authentication, then configure the package's trusted publisher for GitHub repository `sanbaiw/mermaid-validator`, workflow filename `publish.yml`, and publish permission. Only subsequent matching tags use the tokenless workflow. Do not add a temporary repository token fallback.
 
 ## Artifacts and Notes
 
 Baseline package evidence before the allowlist:
 
-    name: mermaid-diagram-validator
+    name: mermaid-validator
     version: 0.3.0
     package content: repository sources, tests, fixtures, plans, compatibility evidence,
                      workflows, and stale dist output in addition to runtime files

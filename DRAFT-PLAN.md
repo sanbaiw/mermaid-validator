@@ -1,4 +1,4 @@
-# Mermaid Diagram Validator — Implementation Plan
+# Mermaid Validator — Implementation Plan
 
 - Status: Stages 0–4 complete; Stage 4 preview package prepared locally, first registry publication pending; Stage 5 not started
 - Updated: 2026-07-31
@@ -341,7 +341,7 @@ Purpose: gather real-world CLI experience from a normal npm/pnpm installation be
 
 Work:
 
-- Publish `mermaid-diagram-validator@0.3.0` as a public `0.x` preview after a final name-availability check.
+- Publish `mermaid-validator@0.3.0` as a public `0.x` preview after a final name-availability check.
 - Ship only the `mermaid-validator` executable surface and its required compiled runtime graph; keep LSP publication deferred.
 - Deny programmatic imports with an empty package `exports` map; emit no declarations and make no JavaScript/TypeScript API stability promise.
 - Verify one real tarball through clean npm and pnpm consumer installs.
@@ -512,7 +512,7 @@ Stage 0 resolved the foundation questions as follows:
 2. Default compatibility is `mermaid@11.16.0` initialized after JSDOM with `{ startOnLoad: false, securityLevel: "strict", suppressErrorRendering: true }` and parsed with errors enabled.
 3. JSDOM-only direct official parsing completed all 27 fixtures with zero engine failures on Node 22.20.0. No browser fallback is required by the tested profile.
 4. Merman `0.7.0` selected facts matched every tested valid fixture across all five families. Composite State internals live under each state's recursive `doc` rather than only the top-level `states` and `relations`; the local adapter now extracts those nested states and transitions. This is fixture-level evidence, not a claim that Merman covers every Mermaid syntax variant, so completeness metadata remains required.
-5. The planned package name is `mermaid-diagram-validator`. The npm registry returned E404 on 2026-07-14; recheck immediately before publication because absence is not a reservation.
+5. The package name is `mermaid-validator`, renamed before first publication so the package and CLI command match. The npm registry returned E404 on 2026-07-31; recheck immediately before publication because absence is not a reservation.
 
 These later decisions are not blockers:
 

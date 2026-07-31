@@ -35,7 +35,7 @@ No fork is needed. The required correctness boundary is expressible with project
 
 `@mermanjs/web@0.7.0` remains an optional, replaceable semantic-facts accelerator. It never overrides the canonical verdict. Its selected facts matched all 12 tested valid fixtures across Flowchart (3), Sequence (2), Pie (2), Class (2), and State (3). Composite State internals are stored under each state's recursive `doc`; the project adapter now includes the nested `Working` and `Waiting` states and their internal transitions instead of inspecting only top-level `states` and `relations`. `complete-for-fixture` remains a fixture-level comparison rather than a claim of grammar-wide completeness. Merman also accepted the invalid `pieChart` header, reinforcing that it cannot supply syntax truth.
 
-The planned package name is `mermaid-diagram-validator`. An npm registry lookup on 2026-07-14 returned E404, but absence is not a reservation; the name must be checked again immediately before publication. The package remains `private: true` throughout the spike.
+The planned package name is `mermaid-validator`. An npm registry lookup must be repeated immediately before publication because absence is not a reservation. The package remains `private: true` throughout the spike. ADR 0002 later activates this name for the public CLI preview.
 
 ## Evaluated dependency profile
 

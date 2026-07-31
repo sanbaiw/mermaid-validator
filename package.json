@@ -1,17 +1,17 @@
 {
-  "name": "mermaid-diagram-validator",
+  "name": "mermaid-validator",
   "version": "0.3.0",
   "private": false,
   "description": "Canonical Mermaid validator with configurable rules and safe fixes",
   "type": "module",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/sanbaiw/mermaid-diagram-validator.git"
+    "url": "git+https://github.com/sanbaiw/mermaid-validator.git"
   },
   "bugs": {
-    "url": "https://github.com/sanbaiw/mermaid-diagram-validator/issues"
+    "url": "https://github.com/sanbaiw/mermaid-validator/issues"
   },
-  "homepage": "https://github.com/sanbaiw/mermaid-diagram-validator#readme",
+  "homepage": "https://github.com/sanbaiw/mermaid-validator#readme",
   "keywords": [
     "mermaid",
     "validator",

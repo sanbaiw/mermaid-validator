@@ -42,7 +42,7 @@ export function formatJsonV2(
   }
   return `${JSON.stringify({
     schemaVersion: 2,
-    tool: { name: "mermaid-diagram-validator", version: toolVersion },
+    tool: { name: "mermaid-validator", version: toolVersion },
     complete,
     valid: complete && documents.every((item) => item.result.valid),
     inputErrors: [...inputErrors]

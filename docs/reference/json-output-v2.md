@@ -7,7 +7,7 @@
 | Field | Type | Meaning |
 |---|---|---|
 | `schemaVersion` | integer | Always `2`. |
-| `tool` | object | Fixed name `mermaid-diagram-validator` and current tool version. |
+| `tool` | object | Fixed name `mermaid-validator` and current tool version. |
 | `complete` | boolean | `true` exactly when no file read or write failed. |
 | `valid` | boolean | `true` exactly when the collection is complete and every emitted document is valid. |
 | `inputErrors` | array | Sorted bounded file-read and file-write errors. |
@@ -62,7 +62,7 @@ In dry-run, the top-level result and collection summary always describe unchange
 ```json
 {
   "schemaVersion": 2,
-  "tool": { "name": "mermaid-diagram-validator", "version": "0.3.0" },
+  "tool": { "name": "mermaid-validator", "version": "0.3.0" },
   "complete": true,
   "valid": false,
   "inputErrors": [],

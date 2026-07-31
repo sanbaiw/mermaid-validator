@@ -99,7 +99,7 @@ describe("JSON-v2 reporter", () => {
     expect(formatJsonV2(records, [], "0.1.0")).toBe(output);
     expect(JSON.parse(output)).toMatchObject({
       schemaVersion: 2,
-      tool: { name: "mermaid-diagram-validator", version: "0.1.0" },
+      tool: { name: "mermaid-validator", version: "0.1.0" },
       complete: true,
       valid: false,
       inputErrors: [],

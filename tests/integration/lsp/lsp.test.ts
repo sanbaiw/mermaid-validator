@@ -90,7 +90,7 @@ describe("built stdio language server", () => {
         textDocumentSync: { openClose: true, change: 2 },
         codeActionProvider: { codeActionKinds: ["quickfix"] },
       },
-      serverInfo: { name: "mermaid-diagram-validator", version: "0.3.0" },
+      serverInfo: { name: "mermaid-validator", version: "0.3.0" },
     });
     await expect(valid.shutdown()).resolves.toEqual({ code: 0, signal: null });
     expect(valid.stderr).toBe("");
@@ -109,7 +109,7 @@ describe("built stdio language server", () => {
         positionEncoding: "utf-16",
         textDocumentSync: { openClose: true, change: 2 },
       },
-      serverInfo: { name: "mermaid-diagram-validator", version: "0.3.0" },
+      serverInfo: { name: "mermaid-validator", version: "0.3.0" },
     });
     incapable.notify("textDocument/didOpen", {
       textDocument: {
@@ -133,7 +133,7 @@ describe("built stdio language server", () => {
     const omitted = client();
     await expect(initialize(omitted, {}, OMITTED_INITIALIZATION_OPTIONS)).resolves.toMatchObject({
       capabilities: { textDocumentSync: { openClose: true, change: 2 } },
-      serverInfo: { name: "mermaid-diagram-validator", version: "0.3.0" },
+      serverInfo: { name: "mermaid-validator", version: "0.3.0" },
     });
     await omitted.shutdown();
 

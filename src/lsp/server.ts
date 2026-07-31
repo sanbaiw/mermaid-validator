@@ -24,7 +24,7 @@ import { resolveLspInitializationOptions } from "./contracts.js";
 import { projectPlanEdits } from "./diagnostics.js";
 import { createValidationScheduler, type ValidationScheduler } from "./validation-scheduler.js";
 
-export const LANGUAGE_SERVER_NAME = "mermaid-diagram-validator";
+export const LANGUAGE_SERVER_NAME = "mermaid-validator";
 export const LANGUAGE_SERVER_VERSION = "0.3.0";
 const FIX_TITLE = "Apply all safe Mermaid fixes in this document";
 const FIX_FAILURE_MESSAGE = "Language server fix planning failed\n";

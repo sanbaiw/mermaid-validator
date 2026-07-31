@@ -83,7 +83,7 @@ This is a foundation proof, not yet an end-user validator. Its observable result
   Rationale: These were the current stable public releases or the JSDOM/type versions used by the evaluated upstream foundation at plan-authoring time. Exact pins and the lockfile make the spike reproducible. If any candidate cannot install or typecheck on the declared Node matrix, the executor must choose the nearest compatible stable release, record the evidence and replacement here and in ADR 0001, and regenerate the lockfile; silently using a range is not allowed.
   Date/Author: 2026-07-14 / Codex
 
-- Decision: Use `mermaid-diagram-validator` as the planned public package name, but keep `private: true` during Stage 0.
+- Decision: Use `mermaid-validator` as the planned public package name, but keep `private: true` during Stage 0.
   Rationale: The name matches the repository and returned npm registry E404 at plan-authoring time. Registry absence is not a reservation, so ADR 0001 must record the check date and the name must be rechecked before the first publication. `private: true` prevents an accidental spike release.
   Date/Author: 2026-07-14 / Codex
 
@@ -165,7 +165,7 @@ Do not create the future `src/cli`, `src/lsp`, `src/extraction`, `src/rules`, `s
 
 ### Milestone 1: Establish a reproducible non-visual package and test harness
 
-Create `package.json` as a private ESM package named `mermaid-diagram-validator`. Set `packageManager` to `pnpm@10.30.1`, set the Node engine to `^22.13.0 || >=24.0.0`, and provide `build`, `typecheck`, `test`, `compatibility`, `compatibility:update`, and `check` scripts. `build` compiles `src/` into ignored `dist/`; `typecheck` checks source and tests without emitting; `test` runs all Vitest suites; `compatibility` builds the child-process worker and then runs the corpus suite; `compatibility:update` intentionally refreshes compatibility snapshots; `check` runs typechecking and all tests. Ensure the test and compatibility lifecycle scripts build the worker before Vitest starts.
+Create `package.json` as a private ESM package named `mermaid-validator`. Set `packageManager` to `pnpm@10.30.1`, set the Node engine to `^22.13.0 || >=24.0.0`, and provide `build`, `typecheck`, `test`, `compatibility`, `compatibility:update`, and `check` scripts. `build` compiles `src/` into ignored `dist/`; `typecheck` checks source and tests without emitting; `test` runs all Vitest suites; `compatibility` builds the child-process worker and then runs the corpus suite; `compatibility:update` intentionally refreshes compatibility snapshots; `check` runs typechecking and all tests. Ensure the test and compatibility lifecycle scripts build the worker before Vitest starts.
 
 Put exact-pinned `mermaid`, `@mermaid-lint/core`, and `@mermanjs/web` in `dependencies`. Put exact-pinned `jsdom`, TypeScript, Vitest, `@types/node`, and `@types/jsdom` in `devDependencies`. JSDOM is a development dependency in Stage 0 because the deliverable is a spike; Stage 1 will decide its product-runtime placement. Do not use caret, tilde, `latest`, workspace wildcard, or optional dependency specifiers for these evaluated packages.
 
@@ -215,7 +215,7 @@ Write `docs/adr/0001-validation-foundation.md` after observing the matrix. The A
 2. Name the exact Mermaid version and initialization profile that define default compatibility.
 3. State whether JSDOM-only official parsing passed the complete corpus without engine failure.
 4. State which selected Merman facts were complete for the tested fixtures in each family and where coverage was partial or unavailable.
-5. Record `mermaid-diagram-validator` as the planned package name, the registry check date, and the requirement to recheck before publishing.
+5. Record `mermaid-validator` as the planned package name, the registry check date, and the requirement to recheck before publishing.
 
 Choose the upstream strategy with this rubric. Wrap unchanged when a public export can satisfy the local adapter contract. Propose a focused upstream contribution when a small, generally useful seam is missing but the project can proceed with a local wrapper. Use a narrow fork only when a required correctness fix cannot be expressed outside the package and waiting for upstream would block Stage 1. Never fork merely to rename types or avoid writing an adapter.
 

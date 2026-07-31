@@ -14,7 +14,7 @@ The project also needs an automated release path. The accepted reference is `/Us
 
 ## Decision
 
-Publish `mermaid-diagram-validator` as a public `0.x` CLI-only preview beginning with version `0.3.0`. The public executable surface is exactly:
+Publish `mermaid-validator` as a public `0.x` CLI-only preview beginning with version `0.3.0`. The public executable surface is exactly:
 
 - `mermaid-validator` mapped to `dist/cli/main.js`.
 
@@ -26,7 +26,7 @@ The tarball allowlist contains `dist/cli/`, `dist/validation/`, and `README.md`,
 
 `.github/workflows/publish.yml` follows the trusted-publisher reference with `id-token: write`, npm `^11.5.1`, an uploaded tarball artifact, and `npm publish <tarball> --provenance --access public`. It contains no `NPM_TOKEN` or token fallback. A matching pushed `v*` tag may publish only after the complete gate and npm/pnpm installed-package smoke checks pass. Manual dispatch verifies and stores an artifact but does not publish.
 
-Trusted-publisher configuration requires the package to exist in npm first. If `mermaid-diagram-validator` is still absent, the owner must perform one manually authenticated, two-factor-protected bootstrap publication of the reviewed tarball and then bind the package to GitHub repository `sanbaiw/mermaid-diagram-validator`, workflow `publish.yml`, with publish permission. If that bootstrap consumes `0.3.0`, no `v0.3.0` tag is pushed afterward because npm versions are immutable; trusted tag publication begins with a later version such as `0.3.1`. This one-time registry operation is outside repository implementation and must not be replaced with a temporary CI token secret.
+Trusted-publisher configuration requires the package to exist in npm first. If `mermaid-validator` is still absent, the owner must perform one manually authenticated, two-factor-protected bootstrap publication of the reviewed tarball and then bind the package to GitHub repository `sanbaiw/mermaid-validator`, workflow `publish.yml`, with publish permission. If that bootstrap consumes `0.3.0`, no `v0.3.0` tag is pushed afterward because npm versions are immutable; trusted tag publication begins with a later version such as `0.3.1`. This one-time registry operation is outside repository implementation and must not be replaced with a temporary CI token secret.
 
 No source module, dependency direction, dependency version, canonical Mermaid profile, parser deadline, test timeout, visual scope, Stage 5 feature, or Stage 6 stable API is changed by this decision. LSP-only packages are development dependencies because no published runtime imports them. The repository has no license file; this decision does not invent or grant a software license.
 
@@ -37,3 +37,5 @@ Users can install the current CLI with npm or pnpm and provide real-world feedba
 Internal compiled files must be present for the commands to run, but the empty export map makes their non-public status machine-enforced for normal package resolution. A future Stage 6 decision that accepts programmatic APIs will deliberately replace the empty map and add declarations and compatibility tests.
 
 The package name and every version remain immutable once published. Registry name availability must be checked immediately before the bootstrap publish. The first publication cannot use trusted publishing because no package settings exist yet; subsequent automated releases can be tokenless after the trust relationship is configured.
+
+Before any registry publication, the owner selected `mermaid-validator` as the single public name for the npm package, CLI command, JSON tool identity, LSP server identity, and GitHub repository. The local checkout directory may retain its earlier filesystem name because it is not a public interface.

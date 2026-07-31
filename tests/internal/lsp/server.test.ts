@@ -267,7 +267,7 @@ describe("language server handler wiring", () => {
         textDocumentSync: { openClose: true, change: 2 },
         codeActionProvider: { codeActionKinds: ["quickfix"] },
       },
-      serverInfo: { name: "mermaid-diagram-validator", version: "0.3.0" },
+      serverInfo: { name: "mermaid-validator", version: "0.3.0" },
     });
   });
 

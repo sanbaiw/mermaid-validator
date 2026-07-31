@@ -1,6 +1,6 @@
 # Releasing the npm preview package
 
-`mermaid-diagram-validator` is a public `0.x` CLI preview. The npm package exposes only `mermaid-validator`; its empty `exports` map deliberately blocks JavaScript and TypeScript imports. The repository's language server is not shipped. A later explicit decision owns LSP publication, while Stage 6 owns any future supported programmatic API.
+`mermaid-validator` is a public `0.x` CLI preview. The npm package exposes the same-named `mermaid-validator` command; its empty `exports` map deliberately blocks JavaScript and TypeScript imports. The repository's language server is not shipped. A later explicit decision owns LSP publication, while Stage 6 owns any future supported programmatic API.
 
 ## Release invariants
 
@@ -10,7 +10,7 @@ The published artifact must be the tarball that passed installation smoke tests.
 
 ## One-time registry bootstrap
 
-npm trusted publishing can only be configured for a package that already exists. Before the first automated release, recheck that `mermaid-diagram-validator` is available, review the tarball, and perform one manual bootstrap publish from an npm account that owns the name and has two-factor authentication enabled:
+npm trusted publishing can only be configured for a package that already exists. Before the first automated release, recheck that `mermaid-validator` is available, review the tarball, and perform one manual bootstrap publish from an npm account that owns the name and has two-factor authentication enabled:
 
 ```sh
 pnpm install --frozen-lockfile
@@ -18,7 +18,7 @@ pnpm check
 pnpm package:smoke
 mkdir -p .release-artifacts
 pnpm pack --pack-destination .release-artifacts
-npm publish .release-artifacts/mermaid-diagram-validator-0.3.0.tgz --access public
+npm publish .release-artifacts/mermaid-validator-0.3.0.tgz --access public
 ```
 
 This manual command changes the public npm registry and must be run only after explicit owner review. Do not add an `NPM_TOKEN` fallback to the GitHub workflow.
@@ -27,7 +27,7 @@ The bootstrap publication consumes version `0.3.0`. Do not push `v0.3.0` afterwa
 
 - provider: GitHub Actions;
 - GitHub owner: `sanbaiw`;
-- repository: `mermaid-diagram-validator`;
+- repository: `mermaid-validator`;
 - workflow filename: `publish.yml`;
 - allowed action: npm publish;
 - environment: none, unless the workflow and npm setting are changed together later.
@@ -61,8 +61,8 @@ npm publish "${PACKAGE_FILE}" --provenance --access public
 After the workflow succeeds, verify the registry metadata and an actual registry installation:
 
 ```sh
-pnpm view mermaid-diagram-validator version versions time dist.tarball --json
-pnpm dlx --package mermaid-diagram-validator@0.3.0 mermaid-validator --version
+pnpm view mermaid-validator version versions time dist.tarball --json
+pnpm dlx --package mermaid-validator@0.3.0 mermaid-validator --version
 ```
 
 Do not rerun a successful tag publication job merely to clear an unrelated warning: npm will reject an existing immutable version, and a release workflow is not a neutral diagnostic action.

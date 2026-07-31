@@ -9,7 +9,7 @@
 | Field | Type | Meaning |
 |---|---|---|
 | `schemaVersion` | integer | Always `1` for this contract. |
-| `tool.name` | string | Always `mermaid-diagram-validator`. |
+| `tool.name` | string | Always `mermaid-validator`. |
 | `tool.version` | string | Validator version that produced the result. |
 | `document.uri` | string | Absolute `file:` URI of the validated standalone document. |
 | `document.version` | integer, optional | In-memory snapshot version when the caller supplied one. The Stage 1 CLI omits it. |
@@ -49,7 +49,7 @@ Valid source:
 ```json
 {
   "schemaVersion": 1,
-  "tool": { "name": "mermaid-diagram-validator", "version": "0.1.0" },
+  "tool": { "name": "mermaid-validator", "version": "0.1.0" },
   "document": { "uri": "file:///workspace/valid.mmd" },
   "valid": true,
   "findings": []
@@ -61,7 +61,7 @@ Syntax error with an approximate one-unit span:
 ```json
 {
   "schemaVersion": 1,
-  "tool": { "name": "mermaid-diagram-validator", "version": "0.1.0" },
+  "tool": { "name": "mermaid-validator", "version": "0.1.0" },
   "document": { "uri": "file:///workspace/invalid.mmd" },
   "valid": false,
   "findings": [
@@ -84,7 +84,7 @@ Officially valid but unsupported family:
 ```json
 {
   "schemaVersion": 1,
-  "tool": { "name": "mermaid-diagram-validator", "version": "0.1.0" },
+  "tool": { "name": "mermaid-validator", "version": "0.1.0" },
   "document": { "uri": "file:///workspace/timeline.mmd" },
   "valid": false,
   "findings": [
@@ -106,7 +106,7 @@ Parser infrastructure failure:
 ```json
 {
   "schemaVersion": 1,
-  "tool": { "name": "mermaid-diagram-validator", "version": "0.1.0" },
+  "tool": { "name": "mermaid-validator", "version": "0.1.0" },
   "document": { "uri": "file:///workspace/diagram.mmd" },
   "valid": false,
   "findings": [
