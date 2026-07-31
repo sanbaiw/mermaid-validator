@@ -1,5 +1,5 @@
 import { execFile } from "node:child_process";
-import { chmod, mkdir, mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises";
+import { chmod, mkdir, mkdtemp, readFile, rm, stat, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { promisify } from "node:util";
@@ -231,11 +231,20 @@ describe("built CLI", () => {
   });
 
   it("handles version and help without discovery", async () => {
-    await expect(run(["--version"])).resolves.toEqual({ status: 0, stdout: "0.3.0\n", stderr: "" });
+    await expect(run(["--version"])).resolves.toEqual({ status: 0, stdout: "0.3.1\n", stderr: "" });
     const help = await run(["--help"]);
     expect(help.status).toBe(0);
     expect(help.stdout).toContain("Usage: mermaid-validator [options] [paths...]");
     expect(help.stderr).toBe("");
+  });
+
+  it("runs through a symlinked installed-style entry path", async () => {
+    const linkedEntry = join(temporaryDirectory, "mermaid-validator-bin.js");
+    await symlink(entry, linkedEntry);
+    await expect(execFileAsync(process.execPath, [linkedEntry, "--version"], {
+      cwd: temporaryDirectory,
+      encoding: "utf8",
+    })).resolves.toMatchObject({ stdout: "0.3.1\n", stderr: "" });
   });
 
   it.each([

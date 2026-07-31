@@ -8,7 +8,7 @@ This document is maintained in accordance with `PLANS.md`. It implements the use
 
 After this work, a user can install `mermaid-validator@0.3.0` with npm or pnpm and run `mermaid-validator` without cloning this repository. The package is a CLI-only preview: it does not carry the repository's language server, publishes no supported JavaScript or TypeScript import, does not add declarations, and does not claim the stable Stage 6 API contract.
 
-A pushed version tag such as `v0.3.0` starts `.github/workflows/publish.yml`. The workflow verifies that the tag and manifest version agree, runs the complete repository gate, builds one tarball, proves that the tarball installs and runs through both npm and pnpm, stores the tarball as a workflow artifact, and publishes that exact tarball to the public npm registry. Authentication uses npm trusted publishing through GitHub OpenID Connect, abbreviated OIDC, which means GitHub provides a short-lived identity token to npm rather than the repository storing a long-lived `NPM_TOKEN` secret.
+A pushed version tag such as `v0.3.1` starts `.github/workflows/publish.yml`. The workflow verifies that the tag and manifest version agree, runs the complete repository gate, builds one tarball, proves that the tarball installs and runs through both npm and pnpm, stores the tarball as a workflow artifact, and publishes that exact tarball to the public npm registry. Authentication uses npm trusted publishing through GitHub OpenID Connect, abbreviated OIDC, which means GitHub provides a short-lived identity token to npm rather than the repository storing a long-lived `NPM_TOKEN` secret.
 
 ## Progress
 
@@ -26,6 +26,9 @@ A pushed version tag such as `v0.3.0` starts `.github/workflows/publish.yml`. Th
 - [x] (2026-07-31) Rebuilt the CLI-only tarball and passed focused contracts, npm/pnpm installed-consumer proof, Node 22 and Node 24 full gates, compatibility evidence, and package dry-run inspection on the rebased baseline.
 - [x] (2026-07-31) Verified that the shorter unscoped npm name `mermaid-validator` returned E404, then adopted it as the single public package, CLI, JSON tool, LSP server, and GitHub repository name at the user's direction.
 - [x] (2026-07-31) Revalidated the renamed package, renamed the GitHub repository to `sanbaiw/mermaid-validator`, updated the local `origin` URL, and created a dedicated rename commit without pushing the outgoing commits.
+- [x] (2026-08-01) Extracted the CLI executable-entrypoint boundary from `origin/codex/package-private-cli` onto the public CLI-only package. Focused architecture, unit, integration, and package contracts passed 4 files/74 tests; `pnpm check` passed 32 files plus one opt-in skip and 287 tests plus one opt-in skip; the unchanged package smoke passed clean npm and pnpm consumer installation after registry access was allowed.
+- [x] (2026-08-01) Manually bootstrapped immutable npm version `0.3.0`, verified registry and installed-package behavior, and configured the npm trusted publisher for `sanbaiw/mermaid-validator`, workflow `publish.yml`, with only `npm publish` permission. The first tag-driven release is therefore `0.3.1`.
+- [x] (2026-08-01) Prepared `0.3.1` as the first trusted tag-driven release. `pnpm check` passed 32 files/287 tests with one opt-in file/test skipped; Compatibility Evidence passed 4 files/16 tests over 27 fixtures/108 observations; npm and pnpm package smoke passed; and the dry-run tarball contained only 66 allowlisted package, README, CLI, and Validation entries.
 
 ## Surprises & Discoveries
 
@@ -38,8 +41,8 @@ A pushed version tag such as `v0.3.0` starts `.github/workflows/publish.yml`. Th
 - Observation: A package smoke test that reuses the user's global npm cache can fail before it examines the tarball and can inherit pnpm-specific `npm_config_*` values.
   Evidence: The first npm consumer install failed with `EPERM` under `~/.npm/_cacache/tmp` because of pre-existing ownership, while also warning about inherited pnpm configuration. The smoke program now removes inherited `npm_config_*` keys and places npm's cache under its own temporary root.
 
-- Observation: The built CLI's direct-execution guard did not recognize npm or pnpm bin symlinks.
-  Evidence: A clean npm tarball install succeeded, but `node_modules/.bin/mermaid-validator --version` exited 0 with empty stdout because `process.argv[1]` named the symlink while `import.meta.url` named its real target. Resolving the entry through `realpathSync()` before comparison makes installed shims call `runCli()` while preserving the direct built-entry path.
+- Observation: The built CLI's direct-execution guard did not recognize npm or pnpm bin symlinks, and the guard existed only because unit tests imported the executable entrypoint as a reusable module.
+  Evidence: A clean npm tarball install succeeded, but `node_modules/.bin/mermaid-validator --version` exited 0 with empty stdout because `process.argv[1]` named the symlink while `import.meta.url` named its real target. A real-path comparison repaired the symptom; splitting the unconditional `main.ts` process root from reusable `run-cli.ts` removes the ambiguous dual role and its entry-detection heuristic.
 
 - Observation: pnpm preserves the explicit `--` separator when forwarding arguments to this package script.
   Evidence: The workflow-shaped command `pnpm package:smoke -- .release-artifacts/mermaid-validator-0.3.0.tgz` invokes Node as `package-smoke.mjs -- <tarball>`. The script accepts both that form and a direct single tarball argument, while rejecting extra arguments.
@@ -84,9 +87,13 @@ A pushed version tag such as `v0.3.0` starts `.github/workflows/publish.yml`. Th
   Rationale: Consumer proof should test the tarball rather than depend on user-global npm cache ownership or configuration leaked by the parent pnpm lifecycle. npm uses a smoke-owned temporary cache; both child managers receive a sanitized environment.
   Date/Author: 2026-07-30 / Codex
 
-- Decision: Normalize only the CLI direct-execution entry through the filesystem real path.
-  Rationale: npm and pnpm execute the CLI through generated symlinks. The runtime guard must compare the compiled module URL to the symlink target, while tests that import `runCli()` must still avoid executing the process entry automatically. LSP already executes unconditionally and needs no matching change.
+- Decision (superseded 2026-08-01): Normalize only the CLI direct-execution entry through the filesystem real path.
+  Rationale: This repaired installed npm and pnpm symlinks, but retained the underlying dual role of one source file as both executable process root and imported unit-test module.
   Date/Author: 2026-07-30 / Codex
+
+- Decision: Make `src/cli/main.ts` an unconditional, non-importable process root and move reusable behavior to `src/cli/run-cli.ts`.
+  Rationale: Installed package-manager symlinks no longer require URL or filesystem identity detection. Unit tests import the side-effect-free adjacent module, and the architecture fitness check rejects source or test imports of every `package.json#bin` entrypoint as well as exports from those entrypoints.
+  Date/Author: 2026-08-01 / User and Codex
 
 - Decision: Follow the `web-source-bundler` trusted-publisher workflow pattern and do not add an `NPM_TOKEN` fallback.
   Rationale: The user explicitly requested trusted publishing. The workflow therefore grants `id-token: write`, installs an OIDC-capable npm CLI, uploads the exact tarball, and publishes it with provenance. A manual workflow dispatch stops after validation and artifact creation; only a pushed tag can publish.
@@ -110,11 +117,11 @@ The retained renamed artifact is `.release-artifacts/mermaid-validator-0.3.0.tgz
 
 On the final renamed tree, Node 22.20.0 passed `pnpm check` with 32 passing files plus one opt-in skipped file and 285 passing tests plus one skipped test in 204.01 seconds. Node 24.18.0 passed the same counts in 204.46 seconds. Both full gates reported the unchanged Compatibility Evidence summary of 27 fixtures and 108 observations. The focused package, JSON reporter, and LSP contracts passed 4 files/42 tests before the full matrix. `git diff --check` and the final scope review passed after this evidence update.
 
-The npm registry returned E404 for `mermaid-validator` on 2026-07-31, so the selected name appeared available at verification time but remains unreserved. GitHub repository ID `1299911016` was renamed in place from its working name to `sanbaiw/mermaid-validator`, and the local SSH `origin` now targets the renamed repository. No tag, push, npm publication, or trusted-publisher binding has been performed. The owner must review and push the workflow without a tag, manually bootstrap the first immutable package version, then configure npm trusted publishing for `sanbaiw/mermaid-validator` and `publish.yml`. If bootstrap publishes `0.3.0`, do not push `v0.3.0`; begin tag-driven trusted publication with a later version such as `0.3.1`.
+The npm registry returned E404 for `mermaid-validator` on 2026-07-31 before the selected name was reserved. GitHub repository ID `1299911016` was renamed in place to `sanbaiw/mermaid-validator`, the local SSH `origin` targets that repository, and the reviewed tarball was manually published as immutable npm version `0.3.0`. Registry metadata and a real `pnpm dlx` installation passed, and npm now trusts GitHub Actions workflow `publish.yml` for `sanbaiw/mermaid-validator` with only `npm publish` permission. No `v0.3.0` tag was created; tag-driven publication begins with `v0.3.1`.
 
 ## Context and Orientation
 
-The repository is one TypeScript ECMAScript-module project. `src/cli/main.ts` is the source for the published `mermaid-validator` executable. `src/lsp/main.ts` remains the source for the checkout-only language server. Both call the repository-private Diagram Validation module through `src/validation/index.ts`; the compiled graph is written under `dist/` by `pnpm build`, but only CLI and Diagram Validation output enter the npm tarball. `src/compatibility/` and its compiled output are test evidence, not product runtime code.
+The repository is one TypeScript ECMAScript-module project. `src/cli/main.ts` is the unconditional process root for the published `mermaid-validator` executable, while reusable command behavior and unit-test seams live in `src/cli/run-cli.ts`. `src/lsp/main.ts` remains the source for the checkout-only language server. Both delivery adapters call the repository-private Diagram Validation module through `src/validation/index.ts`; the compiled graph is written under `dist/` by `pnpm build`, but only CLI and Diagram Validation output enter the npm tarball. `src/compatibility/` and its compiled output are test evidence, not product runtime code.
 
 The baseline `package.json` was private and had no package content allowlist. npm's tarball format always includes `package.json` and normally includes `README.md`; the manifest `files` array must narrow every other shipped path to the CLI runtime graph. The package has no `main` field and uses an empty `exports` object so consumers cannot treat internal compiled files as supported programmatic APIs.
 
@@ -140,7 +147,7 @@ Then update `package.json`. Set `private` to `false`; add repository, bugs, home
 
 Add `tests/architecture/package-distribution.test.ts`. It must prove the manifest is publishable, contains the expected repository identity, exposes exactly the CLI bin, denies all imports, includes only the two runtime dist subtrees, keeps LSP packages out of published runtime dependencies, uses a build-only prepack hook, and does not contain a token-based publication path. It must also compare the package version to the CLI version constant so a release bump cannot publish a tarball whose `--version` output is stale. Update `tests/architecture/no-visual-dependencies.test.ts` only to remove the obsolete `private: true` assertion.
 
-Add `scripts/package-smoke.mjs`. With no argument, it creates a temporary directory, builds an actual tarball, validates the tar archive against the CLI-only allowlist, installs the tarball into separate temporary npm and pnpm consumer projects, and runs the installed `mermaid-validator --version` plus a valid Mermaid file. With a tarball path argument, it skips packing and verifies that exact release artifact. It deletes only its own unique temporary directories in a `finally` block and reports a concise success line. If the installed CLI proof exposes a bin-shim-only defect, fix the entry in `src/cli/main.ts` without changing CLI behavior or the Diagram Validation seam.
+Add `scripts/package-smoke.mjs`. With no argument, it creates a temporary directory, builds an actual tarball, validates the tar archive against the CLI-only allowlist, installs the tarball into separate temporary npm and pnpm consumer projects, and runs the installed `mermaid-validator --version` plus a valid Mermaid file. With a tarball path argument, it skips packing and verifies that exact release artifact. It deletes only its own unique temporary directories in a `finally` block and reports a concise success line. Keep `src/cli/main.ts` as an unconditional executable bootstrap and put reusable command behavior in `src/cli/run-cli.ts`; the installed CLI proof must exercise that process root through package-manager symlinks.
 
 Add `.github/workflows/publish.yml` using the trusted-publisher pattern described above. It verifies pushed tags against `package.json`, installs from the frozen lockfile, runs `pnpm check`, creates one tarball under `.release-artifacts/`, runs the package smoke program against that tarball, uploads it, and publishes only for a tag push. It contains `id-token: write` and no `NODE_AUTH_TOKEN`, `NPM_TOKEN`, or npm secret reference.
 
@@ -187,7 +194,7 @@ Acceptance requires all of the following observable behavior.
 
 `pnpm pack --dry-run --json` shows no `dist/lsp/`, `src/`, `tests/`, `fixtures/`, `.github/`, plans, compatibility evidence, or stale output. A real tarball can be installed by both npm and pnpm in clean temporary consumer projects. In each project, the generated CLI shim prints `0.3.0` and validates a known-good `flowchart LR` input with exit code 0.
 
-The manifest has no supported import entry. `exports` is exactly an empty object, there is no `main`, and no declaration files are shipped. The single `bin` path points to a file included in the tarball and preserves its Node shebang. LSP-only packages are not published runtime dependencies.
+The manifest has no supported import entry. `exports` is exactly an empty object, there is no `main`, and no declaration files are shipped. The single `bin` path points to a file included in the tarball, preserves its Node shebang, exports no reusable API, and has no incoming source or test import. LSP-only packages are not published runtime dependencies.
 
 The publish workflow has a tag/version guard, frozen installation, full quality gate, exact tarball reuse, artifact upload, OIDC permission, and provenance publication. It has no token secret. A manual dispatch completes validation and uploads the artifact but skips `npm publish`; a pushed matching tag reaches the publish step after every prior step passes.
 
@@ -243,10 +250,12 @@ The final content boundary is:
       "README.md"
     ]
 
-No programmatic types cross a new seam. No `src/**` file changes responsibility. The release workflow communicates with npm only through `npm publish` in a GitHub-hosted OIDC environment.
+No programmatic types cross a package seam. Inside the CLI delivery adapter, `main.ts` owns only process startup while `run-cli.ts` owns reusable command behavior and test seams. The release workflow communicates with npm only through `npm publish` in a GitHub-hosted OIDC environment.
 
 2026-07-30 / Codex: Created this ExecPlan after inspecting the complete Stage 4 repository state, the oversized baseline tarball, current npm trusted-publishing requirements, and the user-selected `web-source-bundler` reference. The plan makes preview distribution explicit without activating Stage 5 or promising Stage 6 programmatic stability.
 
 2026-07-30 / Codex: Completed the repository implementation and validation. Updated the living plan with clean-build, isolated-cache, bin-symlink, pnpm argument-forwarding, dual-runtime, exact-artifact, registry-availability, and bootstrap-version evidence so a future release operator can resume from this file alone.
 
 2026-07-31 / Codex: Rebased onto the diagnostic-usability-hardening branch as requested, then revised the distribution boundary to the user's final CLI-only scope. The earlier two-bin artifact evidence is explicitly superseded; repository LSP behavior remains in source and tests but is excluded from the npm tarball and published runtime dependencies. The final CLI-only artifact passed exact npm/pnpm installed-consumer proof and serial Node 22/24 full gates.
+
+2026-08-01 / Codex: Extracted the executable-entrypoint refinement from `origin/codex/package-private-cli` without merging its old private-package or LSP distribution changes. `main.ts` is now an unconditional process root, reusable behavior lives in `run-cli.ts`, unit tests no longer import the executable, architecture tests enforce the bin-entry boundary, and integration coverage proves installed-style symlink execution. The first restricted package-smoke run reached its network timeout during npm install; the identical run passed for npm and pnpm once registry access was allowed.

@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { cp, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { join, relative, resolve, sep } from "node:path";
 import { API } from "typescript/unstable/sync";
@@ -12,8 +13,22 @@ import { describe, expect, it } from "vitest";
 
 interface Edge { source: string; specifier: string; target?: string }
 
+const packageManifest = JSON.parse(readFileSync(resolve("package.json"), "utf8")) as {
+  readonly bin?: Readonly<Record<string, string>>;
+};
+const EXECUTABLE_ENTRYPOINTS = new Set(Object.values(packageManifest.bin ?? {}).map((entry) => {
+  if (!entry.startsWith("./dist/") || !entry.endsWith(".js")) {
+    throw new Error(`Unsupported package bin mapping: ${entry}`);
+  }
+  return `src/${entry.slice("./dist/".length, -".js".length)}.ts`;
+}));
+
 function assertModuleEdges(edges: readonly Edge[]): void {
   for (const edge of edges) {
+    if (edge.target !== undefined && EXECUTABLE_ENTRYPOINTS.has(edge.target)) {
+      expect.unreachable(`Executable entrypoint was imported: ${JSON.stringify(edge)}`);
+    }
+    if (edge.source.startsWith("tests/")) continue;
     const nodeBuiltin = edge.specifier.replace(/^node:/, "");
     if (edge.source.startsWith("src/cli/")) {
       expect(
@@ -126,11 +141,12 @@ describe("module import boundaries", () => {
   it("keeps delivery, validation capabilities, compatibility, and upstream ownership separate", async () => {
     const temporaryRoot = await mkdtemp(resolve(".module-import-boundaries-"));
     await cp(resolve("src"), join(temporaryRoot, "src"), { recursive: true });
+    await cp(resolve("tests"), join(temporaryRoot, "tests"), { recursive: true });
     await writeFile(join(temporaryRoot, "tsconfig.json"), JSON.stringify({
       compilerOptions: {
         target: "ES2023", module: "NodeNext", moduleResolution: "NodeNext", strict: true, noEmit: true,
       },
-      include: ["src/**/*.ts"],
+      include: ["src/**/*.ts", "tests/**/*.ts"],
     }));
     const api = new API();
     const snapshot = api.updateSnapshot({ openProjects: [join(temporaryRoot, "tsconfig.json")] });
@@ -138,15 +154,21 @@ describe("module import boundaries", () => {
       const project = snapshot.getProjects()[0];
       if (!project) throw new Error("TypeScript did not open the build project");
       const edges: Edge[] = [];
-      for (const file of project.rootFiles.filter((path) => path.includes(`${sep}src${sep}`))) {
+      for (const file of project.rootFiles.filter((path) => (
+        path.includes(`${sep}src${sep}`) || path.includes(`${sep}tests${sep}`)
+      ))) {
         const sourceFile = project.program.getSourceFile(file);
         if (!sourceFile) throw new Error(`TypeScript did not parse ${file}`);
+        const source = relative(temporaryRoot, file);
+        if (EXECUTABLE_ENTRYPOINTS.has(source)) {
+          expect(sourceFile.text, `${source} must not export a reusable API`).not.toMatch(/(^|\n)\s*export\s/m);
+        }
         const addEdge = (literal: StringLiteral): void => {
           const symbol = project.checker.getSymbolAtLocation(literal);
           const declaration = symbol?.declarations[0]?.resolve(project);
           const targetFile = declaration?.getSourceFile().fileName;
           edges.push({
-            source: relative(temporaryRoot, file),
+            source,
             specifier: literal.text,
             ...(targetFile?.includes(`${sep}src${sep}`)
               ? { target: relative(temporaryRoot, targetFile) }
@@ -175,6 +197,7 @@ describe("module import boundaries", () => {
 
   it.each([
     [{ source: "src/cli/main.ts", specifier: "../validation/markdown/index.js", target: "src/validation/markdown/index.ts" }],
+    [{ source: "tests/unit/cli/main.test.ts", specifier: "../../../src/cli/main.js", target: "src/cli/main.ts" }],
     [{ source: "src/validation/markdown/extract-markdown.ts", specifier: "../canonical-syntax/index.js", target: "src/validation/canonical-syntax/index.ts" }],
     [{ source: "src/validation/markdown/offset-map.ts", specifier: "../../cli/main.js", target: "src/cli/main.ts" }],
     [{ source: "src/validation/validate-document.ts", specifier: "node:fs/promises" }],

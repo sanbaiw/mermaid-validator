@@ -106,7 +106,7 @@ After discovery, unreadable files are reported on stderr while readable files ar
 | `2` | Configuration, discovery, usage, or file reads/writes made the collection incomplete. |
 | `3` | A canonical parser, Markdown extraction, rule runtime/protocol, or fix-safety system failure made validation indeterminate. |
 
-For mixed results, precedence is `3 > 2 > 1 > 0`. `--version` prints `0.3.0` without starting discovery or the parser worker.
+For mixed results, precedence is `3 > 2 > 1 > 0`. `--version` prints `0.3.1` without starting discovery or the parser worker.
 
 ## Development evidence and scope
 

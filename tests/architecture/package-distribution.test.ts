@@ -61,7 +61,7 @@ describe("preview npm distribution", () => {
 
   it("keeps package and published CLI versions synchronized", async () => {
     const packageJson = await manifest();
-    const cliSource = await readFile(resolve("src/cli/main.ts"), "utf8");
+    const cliSource = await readFile(resolve("src/cli/run-cli.ts"), "utf8");
     expect(cliSource).toContain(`const TOOL_VERSION = "${packageJson.version}";`);
   });
 

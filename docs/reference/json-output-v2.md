@@ -62,7 +62,7 @@ In dry-run, the top-level result and collection summary always describe unchange
 ```json
 {
   "schemaVersion": 2,
-  "tool": { "name": "mermaid-validator", "version": "0.3.0" },
+  "tool": { "name": "mermaid-validator", "version": "0.3.1" },
   "complete": true,
   "valid": false,
   "inputErrors": [],

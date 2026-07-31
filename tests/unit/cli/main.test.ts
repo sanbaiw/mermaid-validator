@@ -4,7 +4,7 @@ import {
   runCli,
   type AtomicReplaceDependencies,
   type CliDependencies,
-} from "../../../src/cli/main.js";
+} from "../../../src/cli/run-cli.js";
 import { CliInputFailure } from "../../../src/cli/contracts.js";
 import type {
   DocumentFixPlan,
@@ -171,7 +171,7 @@ describe("runCli", () => {
 
   it("handles version and invalid format before config or discovery", async () => {
     await expect(invoke({ argv: ["--version"], configFailure: true })).resolves.toMatchObject({
-      code: 0, stdout: "0.3.0\n", stderr: "", documents: [],
+      code: 0, stdout: "0.3.1\n", stderr: "", documents: [],
     });
     await expect(invoke({ argv: ["--format", "yaml"] })).resolves.toMatchObject({ code: 2, stdout: "" });
   });

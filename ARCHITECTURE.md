@@ -2,8 +2,8 @@
 
 - Status: Accepted repository and module architecture
 - Date: 2026-07-14
-- Updated: 2026-07-31
-- Stage 4 state: Complete; CLI-only preview package prepared, first registry publication pending
+- Updated: 2026-08-01
+- Stage 4 state: Complete; CLI-only preview published and trusted tag-driven releases configured
 - Scope: Active non-visual roadmap in `DRAFT-PLAN.md`
 - Package shape: One public CLI-only preview package after Stage 4; Stage 6 decides supported programmatic exports and any justified split
 
@@ -53,6 +53,7 @@ The following rules apply to every active stage.
 10. Only modules required by the active stage may exist. Future empty directories are prohibited.
 11. Rendering, image, geometry, layout-comparison, and vision modules and dependencies remain prohibited until the deferred visual roadmap is explicitly reactivated.
 12. TypeScript source belongs under `src/`; compiled JavaScript, source maps, and build metadata belong under `dist/`, never beside TypeScript source files.
+13. Every executable declared in `package.json#bin` is a terminal process root: its source file exports no reusable API and no source or test module imports it. Reusable and testable behavior belongs in an adjacent module.
 
 ## Module dependency direction
 
@@ -121,6 +122,7 @@ src/
     config.ts
     discovery.ts
     main.ts
+    run-cli.ts
     terminal-output.ts
     json-v2-output.ts
 
@@ -204,6 +206,8 @@ Do not define a generic parser seam that treats official Mermaid, Merman, and me
 ### CLI delivery adapter: `src/cli/`
 
 The CLI translates command-line interactions into Diagram Validation calls.
+
+`main.ts` is the non-importable executable bootstrap. It reads process arguments, calls `runCli()` from `run-cli.ts`, and assigns the resulting process exit code. All reusable command behavior, dependency injection, and unit-test seams belong in `run-cli.ts` or another adjacent CLI module; tests and product modules must never import `main.ts`.
 
 It owns:
 
@@ -373,6 +377,7 @@ An import of `src/validation/document.ts`, `findings.ts`, `validate-document.ts`
 - `src/validation/markdown/**` must not import CLI, Canonical Syntax, Compatibility Evidence, or root Validation types.
 - `src/validation/rules/**` must not import CLI, Compatibility Evidence, Markdown internals, Canonical Syntax internals, filesystem/process APIs, or comparison-engine packages.
 - No module may form a circular project import.
+- No source or test module may import a `package.json#bin` executable entrypoint, and those entrypoints must not export reusable APIs.
 - No future-stage module may be introduced before its stage is active.
 - No visual module or dependency may enter the active graph without an explicit roadmap reactivation decision.
 
@@ -404,6 +409,7 @@ Tests should cross the same interfaces as real callers whenever practical.
 - `tests/integration/lsp/` invokes the built stdio server through a repository-owned framed client and verifies protocol lifecycle, unsaved buffers, diagnostics, parity, and Code Actions.
 - `tests/compatibility/` imports Compatibility Evidence and verifies engine observations and corpus invariants.
 - `tests/architecture/` checks dependency, package, path, and deferred-scope invariants.
+- Unit tests for executable behavior import the adjacent reusable module, never the executable entrypoint itself.
 - Narrow internal tests may deep-import an implementation only from a clearly named `tests/internal/` location or be colocated with that internal module. Such exceptions must not be used as substitutes for module contract tests.
 
 The Stage 0 `tests/architecture/no-visual-dependencies.test.ts` is the first architecture fitness check. Later checks should extend the same principle rather than replacing behavioral tests with file-layout assertions.
@@ -417,11 +423,12 @@ The checker:
 1. Parse TypeScript ESM imports using the repository's NodeNext conventions.
 2. Classify files into the module zones defined in this document.
 3. Fail on every forbidden edge and on deep imports that bypass a module `index.ts` seam.
-4. Fail on circular project imports.
-5. Enforce the external dependency ownership allowlist.
-6. Ignore generated `dist/` output and dependency directories.
-7. Provide actionable diagnostics naming the importer, imported file or package, and violated rule.
-8. Runs as part of `pnpm check`, with focused synthetic edges proving that allowed imports pass and forbidden imports fail.
+4. Fail when a source or test module imports an executable entrypoint, or when an executable entrypoint exports an API.
+5. Fail on circular project imports.
+6. Enforce the external dependency ownership allowlist.
+7. Ignore generated `dist/` output and dependency directories.
+8. Provide actionable diagnostics naming the importer, imported file or package, and violated rule.
+9. Runs as part of `pnpm check`, with focused synthetic edges proving that allowed imports pass and forbidden imports fail.
 
 Representative violating cases include:
 

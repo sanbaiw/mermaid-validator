@@ -1,7 +1,7 @@
 # Mermaid Validator — Implementation Plan
 
-- Status: Stages 0–4 complete; Stage 4 preview package prepared locally, first registry publication pending; Stage 5 not started
-- Updated: 2026-07-31
+- Status: Stages 0–4 complete; Stage 4 CLI preview published and trusted tag-driven releases configured; Stage 5 not started
+- Updated: 2026-08-01
 - Runtime: TypeScript on Node.js
 - Package manager: pnpm
 - Repository shape: one CLI-only public preview package after Stage 4; Stage 6 decides which programmatic interfaces become public
@@ -343,6 +343,7 @@ Work:
 
 - Publish `mermaid-validator@0.3.0` as a public `0.x` preview after a final name-availability check.
 - Ship only the `mermaid-validator` executable surface and its required compiled runtime graph; keep LSP publication deferred.
+- Keep `src/cli/main.ts` as a non-importable executable bootstrap and put reusable command behavior in `src/cli/run-cli.ts`, so package-manager symlinks require no entry-detection heuristic.
 - Deny programmatic imports with an empty package `exports` map; emit no declarations and make no JavaScript/TypeScript API stability promise.
 - Verify one real tarball through clean npm and pnpm consumer installs.
 - Add a tag/version-guarded GitHub Actions workflow using npm trusted publishing, provenance, and no long-lived npm token.
