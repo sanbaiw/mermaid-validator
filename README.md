@@ -108,7 +108,7 @@ Ordinary terminal mode writes each completed document's diagnostics before valid
 | `2` | Configuration, discovery, usage, or file reads/writes made the collection incomplete. |
 | `3` | A canonical parser, Markdown extraction, rule runtime/protocol, or fix-safety system failure made validation indeterminate. |
 
-For mixed results, precedence is `3 > 2 > 1 > 0`. `--version` prints `0.3.2` without starting discovery or the parser worker.
+For mixed results, precedence is `3 > 2 > 1 > 0`. `--version` prints `0.3.3` without starting discovery or the parser worker.
 
 ## Development evidence and scope
 

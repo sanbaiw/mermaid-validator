@@ -15,7 +15,7 @@ import { discoverInputFiles } from "./discovery.js";
 import { formatJsonV2 } from "./json-v2-output.js";
 import { formatTerminal } from "./terminal-output.js";
 
-const TOOL_VERSION = "0.3.2";
+const TOOL_VERSION = "0.3.3";
 const FILE_READ_CONCURRENCY = 16;
 type ExitCode = 0 | 1 | 2 | 3;
 

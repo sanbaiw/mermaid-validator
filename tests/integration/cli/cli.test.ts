@@ -231,7 +231,7 @@ describe("built CLI", () => {
   });
 
   it("handles version and help without discovery", async () => {
-    await expect(run(["--version"])).resolves.toEqual({ status: 0, stdout: "0.3.2\n", stderr: "" });
+    await expect(run(["--version"])).resolves.toEqual({ status: 0, stdout: "0.3.3\n", stderr: "" });
     const help = await run(["--help"]);
     expect(help.status).toBe(0);
     expect(help.stdout).toContain("Usage: mermaid-validator [options] [paths...]");
@@ -244,7 +244,7 @@ describe("built CLI", () => {
     await expect(execFileAsync(process.execPath, [linkedEntry, "--version"], {
       cwd: temporaryDirectory,
       encoding: "utf8",
-    })).resolves.toMatchObject({ stdout: "0.3.2\n", stderr: "" });
+    })).resolves.toMatchObject({ stdout: "0.3.3\n", stderr: "" });
   });
 
   it.each([
