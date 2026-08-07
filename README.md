@@ -99,6 +99,8 @@ Valid input with no rule findings produces no terminal output. Findings use comp
 
 After discovery, unreadable files are reported on stderr while readable files are still validated. JSON marks that collection `complete: false`; terminal and JSON use the same exit precedence.
 
+Ordinary terminal mode writes each completed document's diagnostics before validating the next document; valid documents stay silent. JSON output remains one complete object written only after validation finishes. Canonical parser timeout messages distinguish startup from request work while retaining `system/parser-timeout`. Within one validator process, a startup failure or two consecutive request timeouts temporarily suppress further worker starts; affected later diagrams receive `system/parser-restart-suppressed` and are never reported as valid. Suppression is demand-driven and does not coordinate separate CLI or LSP processes.
+
 | Code | Meaning |
 |---:|---|
 | `0` | The complete collection has no error finding. |

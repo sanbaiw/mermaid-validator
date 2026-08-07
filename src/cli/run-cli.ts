@@ -215,10 +215,19 @@ export async function runCli(
   const { snapshots, inputErrors } = await readSnapshots(discovered, io.readFile);
   const documents: ValidatedDocument[] = [];
   const fixMode = options.fix === true || options.fixDryRun === true;
+  inputErrors.sort((left, right) => left.path.localeCompare(right.path));
+  if (!fixMode) {
+    for (const error of inputErrors) io.stderr.write(`${error.path}: ${error.message}\n`);
+  }
   if (!fixMode) {
     for (const document of snapshots) {
       const rules: ResolvedRuleConfiguration = rulesForPath(loaded, fileURLToPath(document.uri));
-      documents.push({ document, result: await io.validate(document, { rules }) });
+      const result = await io.validate(document, { rules });
+      documents.push({ document, result });
+      if (options.format === "terminal") {
+        const diagnostics = formatTerminal(result, document.text);
+        if (diagnostics) io.stdout.write(diagnostics);
+      }
     }
   } else {
     const planned = [];
@@ -250,19 +259,21 @@ export async function runCli(
       }
     }
   }
-  for (const error of inputErrors.sort((left, right) => left.path.localeCompare(right.path))) {
-    io.stderr.write(`${error.path}: ${error.message}\n`);
+  if (fixMode) {
+    for (const error of inputErrors.sort((left, right) => left.path.localeCompare(right.path))) {
+      io.stderr.write(`${error.path}: ${error.message}\n`);
+    }
   }
   const output = options.format === "json"
     ? formatJsonV2(documents, inputErrors, TOOL_VERSION)
-    : documents.map(({ document, result, fix }) => {
+    : fixMode ? documents.map(({ document, result, fix }) => {
         const source = fix?.status === "applied" ? fix.plan.output! : document.text;
         const diagnostics = formatTerminal(result, source);
         if (fix?.status !== "previewed" && fix?.status !== "applied") return diagnostics;
         const path = fileURLToPath(document.uri);
         const verb = fix.status === "previewed" ? "would apply" : "applied";
         return `${diagnostics}${path}: ${verb} ${fix.plan.edits.length} safe edit(s)\n`;
-      }).join("");
+      }).join("") : "";
   if (output) io.stdout.write(output);
   return exitCodeFor(documents, inputErrors);
 }

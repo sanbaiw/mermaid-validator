@@ -1,10 +1,21 @@
 import { fork, type ChildProcess } from "node:child_process";
+import { performance } from "node:perf_hooks";
 import { fileURLToPath } from "node:url";
 import { sep } from "node:path";
-import type { EngineFailure, SyntaxOutcome, WorkerMessage } from "./protocol.js";
+import type {
+  EngineFailure,
+  RestartSuppressedOutcome,
+  RestartSuppressionCause,
+  StartupFailure,
+  SyntaxOutcome,
+  TimeoutPhase,
+  WorkerMessage,
+  WorkerSyntaxOutcome,
+} from "./protocol.js";
 
 const STDERR_LIMIT = 4_096;
 const DEFAULT_TIMEOUT_MS = 10_000;
+const DEFAULT_RESTART_SUPPRESSION_MS = 5_000;
 
 interface PendingRequest {
   readonly id: number;
@@ -31,6 +42,9 @@ export interface WorkerHostOptions {
   readonly workerPath?: string;
   readonly startupTimeoutMs?: number;
   readonly requestTimeoutMs?: number;
+  readonly restartSuppressionMs?: number;
+  /** Returns finite, nondecreasing monotonic readings after the validated initial sample. */
+  readonly now?: () => number;
 }
 
 function abortError(): Error {
@@ -39,7 +53,11 @@ function abortError(): Error {
   return error;
 }
 
-function engineFailure(failure: EngineFailure, message: string, debugDetail?: string): SyntaxOutcome {
+function engineFailure(
+  failure: Exclude<EngineFailure, "timeout" | "restart-suppressed">,
+  message: string,
+  debugDetail?: string,
+): SyntaxOutcome {
   return {
     kind: "engine-failure",
     failure,
@@ -48,9 +66,46 @@ function engineFailure(failure: EngineFailure, message: string, debugDetail?: st
   };
 }
 
-function isSyntaxOutcome(value: unknown): value is SyntaxOutcome {
+function timeoutOutcome(
+  phase: TimeoutPhase,
+  timeoutMs: number,
+  debugDetail?: string,
+): Extract<SyntaxOutcome, { failure: "timeout" }> {
+  return {
+    kind: "engine-failure",
+    failure: "timeout",
+    phase,
+    message: `Canonical Mermaid parser ${phase} timed out after ${timeoutMs}ms`,
+    ...(debugDetail ? { debugDetail } : {}),
+  };
+}
+
+function suppressionMessage(cause: RestartSuppressionCause): string {
+  if (cause.kind === "consecutive-request-timeouts") {
+    return "Canonical Mermaid parser restart is temporarily suppressed after consecutive request timeouts";
+  }
+  const reason = {
+    timeout: "startup timeout",
+    initialization: "startup initialization failure",
+    crash: "startup process crash",
+    protocol: "startup protocol failure",
+  } as const satisfies Readonly<Record<StartupFailure, string>>;
+  return `Canonical Mermaid parser restart is temporarily suppressed after a ${reason[cause.failure]}`;
+}
+
+function restartSuppressedOutcome(cause: RestartSuppressionCause): RestartSuppressedOutcome {
+  return {
+    kind: "engine-failure",
+    failure: "restart-suppressed",
+    cause,
+    message: suppressionMessage(cause),
+  };
+}
+
+function isWorkerSyntaxOutcome(value: unknown): value is WorkerSyntaxOutcome {
   if (!value || typeof value !== "object" || Array.isArray(value)) return false;
   const outcome = value as Record<string, unknown>;
+  if ("debugDetail" in outcome || "phase" in outcome || "cause" in outcome) return false;
   if (outcome.kind === "accepted") {
     return ["flowchart", "sequence", "pie", "class", "state"].includes(String(outcome.diagramType))
       && typeof outcome.engineVersion === "string";
@@ -66,9 +121,8 @@ function isSyntaxOutcome(value: unknown): value is SyntaxOutcome {
       && typeof outcome.engineVersion === "string";
   }
   return outcome.kind === "engine-failure"
-    && ["initialization", "timeout", "runtime", "crash", "protocol"].includes(String(outcome.failure))
-    && typeof outcome.message === "string"
-    && outcome.debugDetail === undefined;
+    && ["initialization", "runtime", "crash", "protocol"].includes(String(outcome.failure))
+    && typeof outcome.message === "string";
 }
 
 function isWorkerMessage(value: unknown): value is WorkerMessage {
@@ -78,7 +132,7 @@ function isWorkerMessage(value: unknown): value is WorkerMessage {
   if (message.type === "initialization-failed") return typeof message.message === "string";
   return message.type === "response"
     && Number.isSafeInteger(message.requestId)
-    && isSyntaxOutcome(message.outcome);
+    && isWorkerSyntaxOutcome(message.outcome);
 }
 
 function unrefWorker(child: ChildProcess): void {
@@ -97,10 +151,17 @@ export class CanonicalSyntaxWorkerHost {
   readonly #workerPath: string;
   readonly #startupTimeoutMs: number;
   readonly #requestTimeoutMs: number;
+  readonly #restartSuppressionMs: number;
+  readonly #now: () => number;
   #nextRequestId = 1;
   #queue: PendingRequest[] = [];
   #active: ActiveRequest | undefined;
   #worker: WorkerState | undefined;
+  #consecutiveRequestTimeouts = 0;
+  #suppression: {
+    readonly until: number;
+    readonly outcome: RestartSuppressedOutcome;
+  } | undefined;
   #disposed = false;
 
   constructor(options: WorkerHostOptions = {}) {
@@ -109,11 +170,27 @@ export class CanonicalSyntaxWorkerHost {
       ?? siblingWorker.replace(`${sep}src${sep}`, `${sep}dist${sep}`);
     this.#startupTimeoutMs = options.startupTimeoutMs ?? DEFAULT_TIMEOUT_MS;
     this.#requestTimeoutMs = options.requestTimeoutMs ?? DEFAULT_TIMEOUT_MS;
+    this.#restartSuppressionMs = options.restartSuppressionMs ?? DEFAULT_RESTART_SUPPRESSION_MS;
+    if (!Number.isFinite(this.#restartSuppressionMs) || this.#restartSuppressionMs <= 0) {
+      throw new Error("Canonical Mermaid parser restart suppression must be a finite positive number");
+    }
+    this.#now = options.now ?? (() => performance.now());
+    let initialNow: number;
+    try {
+      initialNow = this.#now();
+    } catch {
+      throw new Error("Canonical Mermaid parser monotonic clock failed during initialization");
+    }
+    if (!Number.isFinite(initialNow)) {
+      throw new Error("Canonical Mermaid parser monotonic clock must return a finite number");
+    }
   }
 
   request(source: string, signal?: AbortSignal): Promise<SyntaxOutcome> {
     if (this.#disposed) return Promise.resolve(engineFailure("protocol", "Canonical Mermaid parser host is disposed"));
     if (signal?.aborted) return Promise.reject(abortError());
+    const suppressed = this.#activeSuppressionOutcome();
+    if (suppressed) return Promise.resolve(suppressed);
     return new Promise((resolve, reject) => {
       const request: PendingRequest = {
         id: this.#nextRequestId++,
@@ -131,6 +208,7 @@ export class CanonicalSyntaxWorkerHost {
 
   dispose(): void {
     this.#disposed = true;
+    this.#resetRecoveryState();
     const error = abortError();
     for (const request of this.#queue.splice(0)) {
       request.signal?.removeEventListener("abort", request.abortHandler!);
@@ -148,6 +226,11 @@ export class CanonicalSyntaxWorkerHost {
 
   #pump(): void {
     if (this.#disposed || this.#active || this.#queue.length === 0) return;
+    const suppressed = this.#activeSuppressionOutcome();
+    if (suppressed) {
+      this.#settleAllQueued(suppressed);
+      return;
+    }
     if (!this.#worker) {
       this.#startWorker();
       return;
@@ -158,15 +241,12 @@ export class CanonicalSyntaxWorkerHost {
     this.#worker.stderrTail = "";
     refWorker(this.#worker.child);
     const timer = setTimeout(() => {
-      this.#finishActive(engineFailure(
-        "timeout",
-        `Canonical Mermaid parser timed out after ${this.#requestTimeoutMs}ms`,
-        this.#worker?.stderrTail,
-      ), true);
+      this.#handleRequestTimeout();
     }, this.#requestTimeoutMs);
     this.#active = { request, timer };
     this.#worker.child.send({ type: "validate", requestId: request.id, source: request.source }, (error) => {
       if (error && this.#active?.request === request) {
+        this.#clearRequestTimeoutStreak();
         this.#finishActive(engineFailure("protocol", "Canonical Mermaid parser IPC send failed", this.#worker?.stderrTail), true);
       }
     });
@@ -177,7 +257,10 @@ export class CanonicalSyntaxWorkerHost {
     try {
       child = fork(this.#workerPath, [], { stdio: ["ignore", "ignore", "pipe", "ipc"] });
     } catch {
-      this.#settleQueuedFailure(engineFailure("initialization", "Canonical Mermaid parser failed to initialize"));
+      this.#handleStartupFailure(
+        engineFailure("initialization", "Canonical Mermaid parser failed to initialize"),
+        "initialization",
+      );
       return;
     }
 
@@ -187,13 +270,10 @@ export class CanonicalSyntaxWorkerHost {
       stderrTail: "",
       startupTimer: setTimeout(() => {
         if (this.#worker !== state || state.ready) return;
-        this.#settleQueuedFailure(engineFailure(
+        this.#handleStartupFailure(
+          timeoutOutcome("startup", this.#startupTimeoutMs, state.stderrTail),
           "timeout",
-          `Canonical Mermaid parser timed out after ${this.#startupTimeoutMs}ms`,
-          state.stderrTail,
-        ));
-        this.#discardWorker(true);
-        this.#pump();
+        );
       }, this.#startupTimeoutMs),
     };
     this.#worker = state;
@@ -225,9 +305,10 @@ export class CanonicalSyntaxWorkerHost {
         return;
       }
       if (value.type === "initialization-failed") {
-        this.#settleQueuedFailure(engineFailure("initialization", "Canonical Mermaid parser failed to initialize", state.stderrTail));
-        this.#discardWorker(true);
-        this.#pump();
+        this.#handleStartupFailure(
+          engineFailure("initialization", "Canonical Mermaid parser failed to initialize", state.stderrTail),
+          "initialization",
+        );
         return;
       }
       this.#protocolFailure("Canonical Mermaid parser violated the startup protocol");
@@ -241,29 +322,94 @@ export class CanonicalSyntaxWorkerHost {
     const outcome = value.outcome.kind === "engine-failure"
       ? { ...value.outcome, ...(state.stderrTail ? { debugDetail: state.stderrTail } : {}) }
       : value.outcome;
+    if (outcome.kind === "engine-failure") this.#clearRequestTimeoutStreak();
+    else this.#resetRecoveryState();
     this.#finishActive(outcome, outcome.kind === "engine-failure");
   }
 
   #onWorkerExit(state: WorkerState): void {
     if (this.#worker !== state) return;
     if (this.#active) {
+      this.#clearRequestTimeoutStreak();
       this.#finishActive(engineFailure("crash", "Canonical Mermaid parser process crashed", state.stderrTail), true);
-    } else {
-      this.#settleQueuedFailure(engineFailure("crash", "Canonical Mermaid parser process crashed", state.stderrTail));
-      this.#discardWorker(false);
-      this.#pump();
+      return;
     }
+    if (!state.ready) {
+      this.#handleStartupFailure(
+        engineFailure("crash", "Canonical Mermaid parser process crashed", state.stderrTail),
+        "crash",
+      );
+      return;
+    }
+    this.#clearRequestTimeoutStreak();
+    this.#settleQueuedFailure(engineFailure("crash", "Canonical Mermaid parser process crashed", state.stderrTail));
+    this.#discardWorker(false);
+    this.#pump();
   }
 
   #protocolFailure(message: string): void {
     const outcome = engineFailure("protocol", message, this.#worker?.stderrTail);
     if (this.#active) {
+      this.#clearRequestTimeoutStreak();
       this.#finishActive(outcome, true);
-    } else {
-      this.#settleQueuedFailure(outcome);
-      this.#discardWorker(true);
-      this.#pump();
+      return;
     }
+    if (this.#worker && !this.#worker.ready) {
+      this.#handleStartupFailure(outcome, "protocol");
+      return;
+    }
+    this.#clearRequestTimeoutStreak();
+    this.#settleQueuedFailure(outcome);
+    this.#discardWorker(true);
+    this.#pump();
+  }
+
+  #activeSuppressionOutcome(): RestartSuppressedOutcome | undefined {
+    if (!this.#suppression) return undefined;
+    if (this.#now() < this.#suppression.until) return this.#suppression.outcome;
+    this.#resetRecoveryState();
+    return undefined;
+  }
+
+  #handleStartupFailure(outcome: SyntaxOutcome, failure: StartupFailure): void {
+    this.#settleQueuedFailure(outcome);
+    this.#openSuppression({ kind: "startup-failure", failure });
+  }
+
+  #handleRequestTimeout(): void {
+    const active = this.#active;
+    if (!active) return;
+    const outcome = timeoutOutcome("request", this.#requestTimeoutMs, this.#worker?.stderrTail);
+    this.#active = undefined;
+    clearTimeout(active.timer);
+    active.request.signal?.removeEventListener("abort", active.request.abortHandler!);
+    active.request.resolve(outcome);
+    this.#consecutiveRequestTimeouts += 1;
+    if (this.#consecutiveRequestTimeouts >= 2) {
+      this.#openSuppression({ kind: "consecutive-request-timeouts" });
+      return;
+    }
+    this.#discardWorker(true);
+    this.#pump();
+  }
+
+  #openSuppression(cause: RestartSuppressionCause): void {
+    const outcome = restartSuppressedOutcome(cause);
+    this.#suppression = {
+      until: this.#now() + this.#restartSuppressionMs,
+      outcome,
+    };
+    this.#discardWorker(true);
+    this.#settleAllQueued(outcome);
+  }
+
+  #resetRecoveryState(): void {
+    this.#consecutiveRequestTimeouts = 0;
+    this.#suppression = undefined;
+  }
+
+  #clearRequestTimeoutStreak(): void {
+    this.#consecutiveRequestTimeouts = 0;
   }
 
   #settleQueuedFailure(outcome: SyntaxOutcome): void {
@@ -271,6 +417,13 @@ export class CanonicalSyntaxWorkerHost {
     if (!request) return;
     request.signal?.removeEventListener("abort", request.abortHandler!);
     request.resolve(outcome);
+  }
+
+  #settleAllQueued(outcome: SyntaxOutcome): void {
+    for (const request of this.#queue.splice(0)) {
+      request.signal?.removeEventListener("abort", request.abortHandler!);
+      request.resolve(outcome);
+    }
   }
 
   #finishActive(outcome: SyntaxOutcome, discard: boolean): void {
@@ -297,6 +450,7 @@ export class CanonicalSyntaxWorkerHost {
       return;
     }
     if (this.#active?.request !== request) return;
+    this.#clearRequestTimeoutStreak();
     clearTimeout(this.#active.timer);
     this.#active = undefined;
     request.signal?.removeEventListener("abort", request.abortHandler!);

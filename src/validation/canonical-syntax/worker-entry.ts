@@ -1,5 +1,5 @@
 import { initializeMermaidRuntime, parseCanonicalSyntax } from "./mermaid-runtime.js";
-import type { SyntaxOutcome, ValidateRequest, WorkerMessage } from "./protocol.js";
+import type { ValidateRequest, WorkerMessage, WorkerSyntaxOutcome } from "./protocol.js";
 
 function send(message: WorkerMessage): void {
   if (process.send) process.send(message);
@@ -29,7 +29,7 @@ if (!process.exitCode) {
   process.on("message", (message: unknown) => {
     if (!isValidateRequest(message)) return;
     work = work.then(async () => {
-      let outcome: SyntaxOutcome;
+      let outcome: WorkerSyntaxOutcome;
       try {
         outcome = await parseCanonicalSyntax(message.source);
       } catch {

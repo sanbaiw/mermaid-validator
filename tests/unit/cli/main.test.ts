@@ -6,6 +6,7 @@ import {
   type CliDependencies,
 } from "../../../src/cli/run-cli.js";
 import { CliInputFailure } from "../../../src/cli/contracts.js";
+import { formatTerminal } from "../../../src/cli/terminal-output.js";
 import type {
   DocumentFixPlan,
   DocumentSnapshot,
@@ -35,6 +36,7 @@ async function invoke(options: {
   readonly discoveryFailure?: boolean;
   readonly fixPlan?: (document: DocumentSnapshot) => DocumentFixPlan;
   readonly writeFailure?: ReadonlySet<string>;
+  readonly events?: string[];
 } = {}): Promise<{
   code: number;
   stdout: string;
@@ -62,6 +64,7 @@ async function invoke(options: {
       return path.endsWith(".md") ? "# Guide\n" : "flowchart TD";
     }) as unknown as CliDependencies["readFile"],
     validate: async (document) => {
+      options.events?.push(`validate:${document.uri}`);
       documents.push(document);
       return validation(document, options.findings);
     },
@@ -75,8 +78,8 @@ async function invoke(options: {
       if (options.writeFailure?.has(path)) throw new Error("private write detail");
       writes.push({ path, text });
     },
-    stdout: writer((text) => { stdout += text; }),
-    stderr: writer((text) => { stderr += text; }),
+    stdout: writer((text) => { options.events?.push(`stdout:${text}`); stdout += text; }),
+    stderr: writer((text) => { options.events?.push(`stderr:${text}`); stderr += text; }),
   };
   return {
     code: await runCli(options.argv ?? ["diagram.mmd"], dependencies),
@@ -127,6 +130,44 @@ describe("runCli", () => {
       documents: [{ uri: "file:///workspace/a.mmd" }],
     });
     expect(invocation.stdout).not.toContain("private read detail");
+  });
+
+  it("writes sorted read errors first and streams each terminal document before validating the next", async () => {
+    const events: string[] = [];
+    const invocation = await invoke({
+      files: ["/workspace/z.mmd", "/workspace/b.mmd", "/workspace/a.mmd", "/workspace/c.mmd"],
+      readFailure: new Set(["/workspace/z.mmd", "/workspace/b.mmd"]),
+      findings: [ruleError],
+      events,
+    });
+    expect(events.map((event) => event.split(":", 1)[0])).toEqual([
+      "stderr", "stderr", "validate", "stdout", "validate", "stdout",
+    ]);
+    expect(events[0]).toBe("stderr:/workspace/b.mmd: Unable to read input file\n");
+    expect(events[1]).toBe("stderr:/workspace/z.mmd: Unable to read input file\n");
+    expect(events[2]).toBe("validate:file:///workspace/a.mmd");
+    expect(events[4]).toBe("validate:file:///workspace/c.mmd");
+    expect(invocation.stdout).toBe(invocation.documents.map((document) => (
+      formatTerminal(validation(document, [ruleError]), document.text)
+    )).join(""));
+    expect(invocation.stdout.indexOf("a.mmd")).toBeLessThan(invocation.stdout.indexOf("c.mmd"));
+  });
+
+  it("writes read errors early but keeps JSON stdout atomic until all validations finish", async () => {
+    const events: string[] = [];
+    const invocation = await invoke({
+      argv: ["--format", "json", "."],
+      files: ["/workspace/a.mmd", "/workspace/b.mmd", "/workspace/c.mmd"],
+      readFailure: new Set(["/workspace/b.mmd"]),
+      findings: [ruleError],
+      events,
+    });
+    expect(events.map((event) => event.split(":", 1)[0])).toEqual([
+      "stderr", "validate", "validate", "stdout",
+    ]);
+    expect(events[0]).toBe("stderr:/workspace/b.mmd: Unable to read input file\n");
+    expect(JSON.parse(invocation.stdout)).toMatchObject({ schemaVersion: 2, complete: false });
+    expect(events.filter((event) => event.startsWith("stdout:"))).toHaveLength(1);
   });
 
   it("emits JSON even when all discovered files are unreadable", async () => {

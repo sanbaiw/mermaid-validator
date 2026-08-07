@@ -2,7 +2,7 @@
 
 - Status: Accepted repository and module architecture
 - Date: 2026-07-14
-- Updated: 2026-08-01
+- Updated: 2026-08-07
 - Stage 4 state: Complete; CLI-only preview published and trusted tag-driven releases configured
 - Scope: Active non-visual roadmap in `DRAFT-PLAN.md`
 - Package shape: One public CLI-only preview package after Stage 4; Stage 6 decides supported programmatic exports and any justified split
@@ -191,13 +191,16 @@ This is an internal deep module owned by Diagram Validation. It hides all behavi
 It owns:
 
 - worker serialization and the host/worker message protocol;
-- bounded timeouts, crash detection, restart behavior, and disposal;
+- separate bounded startup and request deadlines, crash detection, restart behavior, and disposal;
+- process-local, fixed-duration worker-start suppression after source-independent startup failure or two consecutive request timeouts;
 - JSDOM global installation before Mermaid is dynamically imported;
 - the exact Mermaid initialization profile accepted by ADR 0001;
 - opportunistic diagram-type detection and mandatory official parsing;
 - normalization of upstream errors into an internal Syntax Outcome.
 
 `worker-host.ts` is the parent-process implementation. `worker-entry.ts` is the executable child-process entry. `protocol.ts` contains only JSON-serializable host/worker messages. `mermaid-runtime.ts` is the only product file allowed to import `mermaid` or `jsdom`. `normalize-mermaid-error.ts` is the only product implementation that understands raw Mermaid error shapes.
+
+The parent host alone owns timeout phases, bounded private stderr, and restart-suppression outcomes. The child protocol cannot report those host-only fields. Suppression is demand-driven: no cooldown timer or probe worker is created, and the next real request at or after the fixed 5,000 ms deadline may start the ordinary worker. This bounds repeated launches only within one `CanonicalSyntaxWorkerHost`; separate CLI or LSP processes may each launch their own initial worker.
 
 The Canonical Syntax interface is internal. CLI, LSP, MCP, and Compatibility Evidence must not deep-import it. They validate through `src/validation/index.ts`.
 
@@ -492,3 +495,11 @@ Stage 4 correctness closed at repository-private version `0.3.0`; ADR 0002 subse
 ## Preview distribution verification evidence
 
 The accepted npm package, CLI command, product-reported tool identity, LSP server identity, and GitHub repository name are all `mermaid-validator`. Version `0.3.0` was the manually authenticated bootstrap. The first tag-driven attempt, `v0.3.1`, passed the repository and artifact gates and reached npm through the configured OIDC trusted publisher, but npm rejected provenance because the GitHub source repository is private; that version was not published and its tag was not moved. The workflow now explicitly disables only provenance while retaining `id-token: write` and tokenless OIDC authentication. Immutable tag `v0.3.2` published successfully and registry-installed `pnpm dlx` verification printed `0.3.2` and validated a known-good Flowchart with exit 0. The published surface remains CLI-only; the LSP and programmatic interfaces remain outside the package.
+
+## Post-Stage-4 canonical-worker recovery hardening
+
+The CLI preview and checkout-only LSP retain the exact-pinned canonical parser, one serialized worker, 10,000 ms startup and request deadlines, and no retry of a failed diagram. The parent host now distinguishes the two timeout phases internally and in stable messages. A pre-ready startup failure suppresses further worker starts in that process for a fixed demand-driven 5,000 ms interval; request timeouts allow one fresh-worker attempt and suppress starts only after the second consecutive actual parser timeout. Requests resolved without a launch receive `system/parser-restart-suppressed`, never a fabricated timeout. Accepted, syntax-error, and unsupported-type outcomes prove responsive infrastructure and reset recovery; cancellation stays an `AbortError` path.
+
+Ordinary non-fix terminal delivery writes each completed document's diagnostics before validating the next document. JSON-v2 and both fix modes remain aggregated; JSON stdout is still one complete object. Known non-fix read errors are sorted and written before validation. These changes stay inside the accepted Canonical Syntax and CLI responsibilities, add no module edge or dependency, and do not coordinate separate operating-system processes.
+
+Final local acceptance passed on Node 24.18.0 and Node 22.20.0 with 32 test files plus one opt-in skipped file and 307 tests plus one skip on each runtime. Separate Compatibility Evidence remained 4 files/16 tests over 27 fixtures/108 observations on both runtimes. Clean npm and pnpm consumer package smoke passed for `mermaid-validator@0.3.2`, and independent read-only review found no actionable issue. This is process-local and workstation-local evidence, not cross-platform or hosted-CI certification.

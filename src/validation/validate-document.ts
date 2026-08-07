@@ -38,6 +38,7 @@ const DEFAULT_DEPENDENCIES: Required<ValidationDependencies> = {
 const MARKDOWN_MAPPING_FAILURE_MESSAGE = "Unable to map Mermaid diagram offsets to Markdown";
 const FAILURE_CODES = {
   initialization: "system/parser-initialization-failed", timeout: "system/parser-timeout",
+  "restart-suppressed": "system/parser-restart-suppressed",
   runtime: "system/parser-runtime-failed", crash: "system/parser-crashed", protocol: "system/parser-protocol-error",
 } as const satisfies Readonly<Record<string, BuiltInFindingCode>>;
 

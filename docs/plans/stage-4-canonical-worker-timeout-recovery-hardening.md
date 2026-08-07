@@ -32,11 +32,13 @@ The worker itself remains unchanged in role. It is still one ordinary Node child
 - [x] (2026-08-06 19:44Z) Resolved the suppression-message branch with the user: fix five cause-specific public messages and omit remaining-time text so cached outcomes remain truthful for their full interval.
 - [x] (2026-08-06 19:44Z) Ran the focused pre-implementation baseline after design review: 3 test files and 32 tests passed in 5.84 seconds; product source remains unchanged.
 - [x] (2026-08-07) Completed the reopened design review and final consistency pass. The plan now contains every agreed branch, an explicit extended `EngineFailure` union, and acceptance coverage that rejects worker-supplied host-only outcomes and private detail.
-- [ ] Milestone 1: make startup timeout, request timeout, and restart suppression structurally distinct while preserving the existing timeout code and deadlines.
-- [ ] Milestone 2: implement and prove bounded worker-start suppression, deterministic recovery, cancellation, and process-exit behavior.
-- [ ] Milestone 3: stream completed non-fix terminal diagnostics while keeping JSON and fix-mode aggregation contracts intact.
-- [ ] Milestone 4: update current architecture, roadmap, recovery-history documentation, and user-facing timeout examples.
-- [ ] Milestone 5: pass focused, dual-runtime, compatibility, package, integrity, and independent review gates; record actual evidence here.
+- [x] (2026-08-07 01:50Z) Re-ran the requested implementation baseline on Node 22.20.0: the same 3 focused files and 32 tests passed in 9.04 seconds before source edits.
+- [x] (2026-08-07 02:02Z) Milestone 1 complete: host-only timeout phases and restart-suppression causes are discriminated internally, worker IPC rejects host-only outcomes/private detail, both real timeout phases retain `system/parser-timeout`, and suppressed work maps to `system/parser-restart-suppressed` without leaking private fields.
+- [x] (2026-08-07 02:02Z) Milestone 2 complete: startup failures bound eight queued requests to one launch; two consecutive request timeouts bound launches to two; fake-clock expiry, repeated fixed 5,000 ms intervals, responsive recovery, cancellation distinctions, disposal, stderr bounds, and forged-worker outcomes are covered.
+- [x] (2026-08-07 02:02Z) Milestone 3 complete: non-fix read failures write first, ordinary terminal diagnostics stream document-by-document, JSON stdout remains one atomic object, and fix-mode aggregation remains unchanged.
+- [x] (2026-08-07 02:02Z) Focused post-implementation gate passed 9 files and 122 tests in 118.72 seconds, including real CLI/LSP process parity and the new worker/CLI behavior.
+- [x] (2026-08-07 02:02Z) Milestone 4 complete: synchronized current architecture, roadmap, README, JSON-v2 reference, and historical Stage 1/2 cross-references without changing JSON-v1 history or Stage 5 scope.
+- [x] (2026-08-07 02:25Z) Milestone 5 complete: Node 24.18.0 and Node 22.20.0 full gates each passed 32 files plus one opt-in skip and 307 tests plus one skip; both separate Compatibility Evidence gates passed 4 files/16 tests over 27 fixtures/108 observations; npm/pnpm package smoke, a suppression-path one-shot exit check, scoped integrity inspection, and independent review all passed.
 
 ## Surprises & Discoveries
 
@@ -63,6 +65,9 @@ The worker itself remains unchanged in role. It is still one ordinary Node child
 
 - Observation: Host-local suppression cannot limit simultaneous first launches across validator processes.
   Evidence: the incident research recorded 16 page-level validator invocations running concurrently, which can create 16 parent CLI processes and 16 initial Mermaid/JSDOM children. `CanonicalSyntaxWorkerHost` state is process-local, and this plan adds no shared daemon, lock, semaphore, or filesystem coordination. The later local-metrics plan records overlapping sessions so a separate process-level policy can be evidence-driven.
+
+- Observation: A 40 ms synthetic startup deadline can expire before a freshly forked Node fixture executes its first launch-marker write on the reference machine.
+  Evidence: the first implementation run produced all expected startup-timeout/suppression outcomes but no child-side marker before the host killed the process. Raising only that fixture's injected startup deadline to 300 ms made the launch marker deterministic; production remains 10,000 ms and suppression tests still use the injected monotonic clock rather than real cooldown sleeps.
 
 ## Decision Log
 
@@ -156,7 +161,11 @@ The worker itself remains unchanged in role. It is still one ordinary Node child
 
 ## Outcomes & Retrospective
 
-Planning outcome: the reopened design review is complete and implementation has not started. The agreed model has one ordinary worker at most, starts allowed or suppressed, one consecutive request-timeout counter, one fixed demand-driven suppression interval, and no probe or escalation state. Complete this section after every implementation milestone and replace this planning-only statement with actual behavior, remaining gaps, and validation evidence.
+All five milestones are implemented. One host still owns at most one ordinary serialized worker, but it now distinguishes startup and request deadlines, caches an honest host-only suppression outcome, bounds source-independent startup outages to one launch, and permits exactly one fresh-worker recovery attempt before suppressing consecutive request timeouts. Suppression uses one fixed demand-driven interval and no timer, probe, retry, escalation state, public option, or dependency. Cancellation remains an `AbortError`; accepted, syntax-error, and unsupported outcomes prove infrastructure responsiveness.
+
+Ordinary terminal mode now exposes completed-document diagnostics during a long collection while JSON and fix modes retain their aggregation guarantees. The focused 9-file/122-test gate and both supported-runtime full gates are green. Compatibility Evidence remains unchanged, installed npm/pnpm consumers pass, and a suppression-path one-shot process exits without explicit disposal. Independent review reported no actionable findings.
+
+The deliberate residual risks remain unchanged: repeated post-ready runtime, crash, or protocol failures are not suppression inputs, and separate CLI/LSP processes may each launch an initial worker. LSP suppression behavior continues to inherit the shared validation seam rather than owning a delivery-specific recovery policy. These are explicit evidence-gated non-goals rather than incomplete milestones.
 
 ## Context and Orientation
 
@@ -166,7 +175,7 @@ A **worker** in this plan is the Node child process running `src/validation/cano
 
 The **worker host** is `src/validation/canonical-syntax/worker-host.ts` in the parent CLI or LSP process. It lazily forks the worker, serializes requests through one FIFO queue, holds at most one active request, captures bounded private stderr, enforces startup and request timers, kills failed children, and keeps a successful idle child unreferenced so a one-shot CLI can exit. `src/validation/canonical-syntax/protocol.ts` owns the internal JSON-serializable message and Syntax Outcome types. `src/validation/canonical-syntax/index.ts` is the only seam root Diagram Validation may import.
 
-A **startup timeout** begins after the host forks a child and ends when the child sends `ready`. It covers process startup, module loading, JSDOM setup, Mermaid import, and Mermaid initialization. A **request timeout** begins only after a ready worker receives a real Mermaid source and ends when that request returns a response. Both deadlines are currently 10,000 ms, but the host collapses them into one internal classification and message.
+A **startup timeout** begins after the host forks a child and ends when the child sends `ready`. It covers process startup, module loading, JSDOM setup, Mermaid import, and Mermaid initialization. A **request timeout** begins only after a ready worker receives a real Mermaid source and ends when that request returns a response. Both deadlines remain 10,000 ms. The implemented host now carries the phase structurally and uses the corresponding stable startup or request message while Diagram Validation keeps the shared `system/parser-timeout` code.
 
 **Start suppression** means that the host temporarily refuses to fork another worker. It does not keep a failed child alive and does not make the caller sleep. A request arriving before the current suppression record's `until` deadline resolves immediately with its system outcome. The fixed **suppression interval** is a launch-rate control, not a claim about how long a healthy worker takes; this plan does not escalate it after repeated failures.
 
@@ -431,7 +440,49 @@ Focused baseline after reopened design review:
     Tests       32 passed (32)
     Duration    5.84s
 
-Replace these expected summaries with exact test names and transcripts as implementation proceeds.
+Implementation baseline requested on 2026-08-07 under Node 22.20.0:
+
+    Test Files  3 passed (3)
+    Tests       32 passed (32)
+    Duration    9.04s
+
+Focused implementation gate after Milestones 1–3:
+
+    Test Files  9 passed (9)
+    Tests       122 passed (122)
+    Duration    118.72s
+
+The worker-host file contributes 27 passing tests. The startup-outage case observes one launch, one startup timeout, and seven immediate suppressed outcomes. The request-outage case observes two timed-out launches before suppression, the same 5,000 ms boundary across repeated intervals, and demand-driven recovery with no escalation state.
+
+Final supported-runtime acceptance:
+
+    Node 24.18.0 pnpm check
+      Test Files  32 passed | 1 skipped (33)
+      Tests       307 passed | 1 skipped (308)
+      Duration    202.64s
+
+    Node 24.18.0 pnpm compatibility
+      Test Files  4 passed (4)
+      Tests       16 passed (16)
+      Duration    8.69s
+      Evidence    27 fixtures, 108 observations
+
+    Node 22.20.0 pnpm check
+      Test Files  32 passed | 1 skipped (33)
+      Tests       307 passed | 1 skipped (308)
+      Duration    289.29s
+
+    Node 22.20.0 pnpm compatibility
+      Test Files  4 passed (4)
+      Tests       16 passed (16)
+      Duration    10.99s
+      Evidence    27 fixtures, 108 observations
+
+    Package smoke passed for npm and pnpm: mermaid-validator@0.3.2
+    Suppressed one-shot exited without dispose
+    Independent read-only review: no actionable findings
+
+The first sandboxed package smoke timed out while npm tried to install tarball dependencies; rerunning the unchanged smoke with network access passed both consumers. The frozen Node 24 and Node 22 installs likewise required network access after pnpm recreated `node_modules`; both restored the same 264 locked packages without dependency or lockfile changes.
 
 ## Interfaces and Dependencies
 
@@ -540,3 +591,7 @@ No reverse edge or sideways delivery-adapter edge is permitted. Compatibility Ev
 2026-08-06: Made the recovery boundary explicitly process-local. One host bounds its own repeated worker launches, but concurrent CLI/LSP processes may each start an initial worker; shared process coordination remains outside this plan pending overlap metrics and a separate design.
 
 2026-08-06: Fixed five public suppression messages for startup timeout, startup initialization failure, startup process crash, startup protocol failure, and consecutive request timeouts. Messages omit interval and remaining-time text so one cached outcome remains truthful until expiry.
+
+2026-08-07: Implemented Milestones 1–4 and updated every living-document section with actual behavior and focused evidence. The only test-design adjustment was increasing the child-side startup-outage marker fixture from a 40 ms to a 300 ms injected startup deadline so the forked Node process can record its launch before being killed; product deadlines and the fixed fake-clock suppression policy are unchanged.
+
+2026-08-07: Completed Milestone 5 and the plan. Both supported runtime gates, both unchanged Compatibility Evidence gates, npm/pnpm package smoke, scoped integrity checks, suppression-path process exit, and independent read-only review passed. No dependency, JSON schema, package export, version, release, or Git state was changed beyond the ordinary unstaged implementation and documentation patches.

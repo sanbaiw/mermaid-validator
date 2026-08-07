@@ -1,7 +1,7 @@
 # Mermaid Validator — Implementation Plan
 
 - Status: Stages 0–4 complete; Stage 4 CLI preview published and trusted tag-driven releases configured; Stage 5 not started
-- Updated: 2026-08-01
+- Updated: 2026-08-07
 - Runtime: TypeScript on Node.js
 - Package manager: pnpm
 - Repository shape: one CLI-only public preview package after Stage 4; Stage 6 decides which programmatic interfaces become public
@@ -168,7 +168,7 @@ Stage 5 extends this contract with `facts`, meaning the required semantic facts 
 
 ### 4.6 Parser isolation
 
-Mermaid is browser-oriented and uses mutable global state. Canonical parsing runs in a serialized worker with the DOM environment initialized before Mermaid is dynamically imported. The worker has timeouts and restart behavior.
+Mermaid is browser-oriented and uses mutable global state. Canonical parsing runs in a serialized worker with the DOM environment initialized before Mermaid is dynamically imported. The parent host enforces separate 10-second startup and request deadlines. A source-independent startup failure suppresses further starts in that process for a fixed, demand-driven 5-second interval; one request timeout permits one fresh worker, while a second consecutive request timeout opens the same suppression. Suppressed requests receive honest system Findings and are never treated as valid. The policy is process-local and does not coordinate initial worker launches across separate CLI or LSP processes.
 
 A browser-backed parsing fallback is a contingency only if Stage 0 proves JSDOM cannot reliably support canonical parsing. Such a fallback would be parser infrastructure, not activation of the deferred visual roadmap, and would require a separate decision before adding a browser dependency.
 
@@ -312,7 +312,7 @@ Release cut: `v0.2` repository-aware validator with configurable rules and safe 
 
 ### Stage 4 — LSP adapter
 
-Status: Completed on 2026-07-30 as the private `0.3.0` CLI plus LSP cut. Unsaved Mermaid/Markdown diagnostics, stale-result rejection, UTF-16 projection, strict initialization, bounded adapter failures, opaque URI schemes, and planner-backed versioned Quick Fixes are implemented. The default test runner now serializes test files with `fileParallelism: false` because the two-worker promotion candidate still produced one process-heavy CLI test timeout during repeated Node 24 proof. On the unchanged final surface, three consecutive default Node 24.18.0 full gates passed 264 tests with one opt-in skip in 273.31, 185.51, and 187.30 seconds; the Node 22.20.0 full gate passed the same counts in 229.84 seconds. Both runtime compatibility gates passed 16 tests over 27 fixtures/108 observations. The 10-second product parser deadline, 20-second Vitest timeout, real-process coverage, and no-retry policy remain unchanged. This is local Stage 4 closeout evidence, not a cross-platform or hosted-CI certification. Noncanonical fast mode remains deferred.
+Status: Completed on 2026-07-30 as the private `0.3.0` CLI plus LSP cut, then canonical-worker-recovery hardened on 2026-08-07 without starting Stage 5. Unsaved Mermaid/Markdown diagnostics, stale-result rejection, UTF-16 projection, strict initialization, bounded adapter failures, opaque URI schemes, and planner-backed versioned Quick Fixes are implemented. The recovery hardening distinguishes startup/request timeout messages, bounds process-local worker restart storms with fixed demand-driven suppression, and streams ordinary terminal diagnostics while retaining atomic JSON. The default test runner serializes test files with `fileParallelism: false` because the two-worker promotion candidate still produced one process-heavy CLI test timeout during repeated Node 24 proof. On the original closeout surface, three consecutive default Node 24.18.0 full gates passed 264 tests with one opt-in skip in 273.31, 185.51, and 187.30 seconds; the Node 22.20.0 full gate passed the same counts in 229.84 seconds. Recovery-hardening acceptance passed 307 tests plus one opt-in skip on both Node 24.18.0 and Node 22.20.0, and both runtime compatibility gates remained 16 tests over 27 fixtures/108 observations. Clean npm/pnpm package smoke also passed. The 10-second product parser deadlines, 20-second Vitest timeout, real-process coverage, and no-retry policy remain unchanged. This is local Stage 4 evidence, not a cross-platform or hosted-CI certification. Noncanonical fast mode remains deferred.
 
 Purpose: support IDEs and coding agents while the core remains small.
 

@@ -26,13 +26,16 @@ Spans are zero-based, half-open UTF-16 code-unit offsets in the original host do
 
 JSON exposes only this host-document `span`; there is no diagram-relative `engineLocation` field in the contract. Optional syntax `help` is project-owned advisory text. It may explain a conservatively recognized error shape, but it never changes the exact-pinned official Mermaid verdict, Finding severity, or validity.
 
-Stable Stage 3 codes are:
+Actual canonical-worker timeouts retain `system/parser-timeout`; their stable messages distinguish `startup` from `request`. A request resolved without launching a worker while process-local restart suppression is active uses `system/parser-restart-suppressed`. Internal timeout `phase`, structured suppression `cause`, bounded worker `debugDetail`, interval deadlines, and remaining durations are never JSON fields. JSON remains schema version 2 because the Finding shape is unchanged.
+
+Current stable codes are:
 
 - `mermaid/syntax-error`
 - `mermaid/unsupported-diagram-type`
 - `system/markdown-extraction-failed`
 - `system/parser-initialization-failed`
 - `system/parser-timeout`
+- `system/parser-restart-suppressed`
 - `system/parser-runtime-failed`
 - `system/parser-crashed`
 - `system/parser-protocol-error`

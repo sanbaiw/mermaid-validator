@@ -1,4 +1,4 @@
-import type { SyntaxOutcome } from "./protocol.js";
+import type { WorkerSyntaxOutcome } from "./protocol.js";
 
 function record(value: unknown): Record<string, unknown> | undefined {
   return value && typeof value === "object" && !Array.isArray(value)
@@ -30,7 +30,7 @@ export function normalizeMermaidError(
   error: unknown,
   engineVersion: string,
   diagramType?: string,
-): Extract<SyntaxOutcome, { kind: "syntax-error" }> {
+): Extract<WorkerSyntaxOutcome, { kind: "syntax-error" }> {
   const value = record(error);
   const hash = record(value?.hash);
   const loc = record(hash?.loc);

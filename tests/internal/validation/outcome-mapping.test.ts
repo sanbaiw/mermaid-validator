@@ -70,7 +70,6 @@ describe("syntax outcome mapping", () => {
 
   it.each([
     ["initialization", "system/parser-initialization-failed"],
-    ["timeout", "system/parser-timeout"],
     ["runtime", "system/parser-runtime-failed"],
     ["crash", "system/parser-crashed"],
     ["protocol", "system/parser-protocol-error"],
@@ -91,5 +90,40 @@ describe("syntax outcome mapping", () => {
       locationPrecision: "document",
     }]);
     expect(JSON.stringify(mapped)).not.toContain("PRIVATE_MARKER");
+  });
+
+  it.each(["startup", "request"] as const)("maps a %s timeout without exposing its host-only phase", (phase) => {
+    const mapped = resultFromSyntaxOutcome(document, {
+      kind: "engine-failure",
+      failure: "timeout",
+      phase,
+      message: `stable ${phase} timeout`,
+      debugDetail: "/private/worker/path stack PRIVATE_MARKER",
+    });
+    expect(mapped.findings).toEqual([{
+      code: "system/parser-timeout",
+      severity: "error",
+      message: `stable ${phase} timeout`,
+      source: "system",
+      locationPrecision: "document",
+    }]);
+    expect(JSON.stringify(mapped)).not.toMatch(/phase|PRIVATE_MARKER/);
+  });
+
+  it("maps restart suppression without exposing its cause", () => {
+    const mapped = resultFromSyntaxOutcome(document, {
+      kind: "engine-failure",
+      failure: "restart-suppressed",
+      cause: { kind: "startup-failure", failure: "timeout" },
+      message: "Canonical Mermaid parser restart is temporarily suppressed after a startup timeout",
+    });
+    expect(mapped.findings).toEqual([{
+      code: "system/parser-restart-suppressed",
+      severity: "error",
+      message: "Canonical Mermaid parser restart is temporarily suppressed after a startup timeout",
+      source: "system",
+      locationPrecision: "document",
+    }]);
+    expect(JSON.stringify(mapped)).not.toContain("cause");
   });
 });

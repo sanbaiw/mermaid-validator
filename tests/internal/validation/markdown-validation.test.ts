@@ -25,7 +25,7 @@ describe("Markdown validation orchestration", () => {
     const result = await validateDocumentWithDependencies(markdown(), {}, dependencies(async () => {
       calls += 1;
       return calls === 1
-        ? { kind: "engine-failure", failure: "timeout", message: "timeout" }
+        ? { kind: "engine-failure", failure: "timeout", phase: "request", message: "timeout" }
         : { kind: "accepted", diagramType: "sequence", engineVersion: "11.16.0" };
     }));
     expect(calls).toBe(2);

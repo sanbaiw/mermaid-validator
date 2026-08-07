@@ -6,6 +6,7 @@ export type BuiltInFindingCode =
   | "system/markdown-extraction-failed"
   | "system/parser-initialization-failed"
   | "system/parser-timeout"
+  | "system/parser-restart-suppressed"
   | "system/parser-runtime-failed"
   | "system/parser-crashed"
   | "system/parser-protocol-error"

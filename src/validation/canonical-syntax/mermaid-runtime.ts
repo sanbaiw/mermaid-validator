@@ -1,6 +1,6 @@
 import { JSDOM } from "jsdom";
 import { normalizeMermaidError } from "./normalize-mermaid-error.js";
-import type { SyntaxOutcome, TargetDiagramType } from "./protocol.js";
+import type { TargetDiagramType, WorkerSyntaxOutcome } from "./protocol.js";
 
 const ENGINE_VERSION = "11.16.0";
 const PROFILE = {
@@ -60,7 +60,7 @@ function nonEmptyString(value: unknown): string | undefined {
   return typeof value === "string" && value.trim() ? value : undefined;
 }
 
-export async function parseCanonicalSyntax(source: string): Promise<SyntaxOutcome> {
+export async function parseCanonicalSyntax(source: string): Promise<WorkerSyntaxOutcome> {
   mermaidPromise ??= loadMermaid();
   const mermaid = await mermaidPromise;
   let detectedType: string | undefined;
